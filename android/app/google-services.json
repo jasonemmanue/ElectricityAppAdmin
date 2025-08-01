@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "921446424868",
+    "project_id": "sos-electricity-app",
+    "storage_bucket": "sos-electricity-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:921446424868:android:c4069a4d62c951a5d6d3b1",
+        "android_client_info": {
+          "package_name": "com.example.electricity_app_admin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBMSb74CXyrG_-eIg9INuZPIlm6t79G1EM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:921446424868:android:dc39f71d3a0bd82dd6d3b1",
+        "android_client_info": {
+          "package_name": "com.example.electricityapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBMSb74CXyrG_-eIg9INuZPIlm6t79G1EM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
