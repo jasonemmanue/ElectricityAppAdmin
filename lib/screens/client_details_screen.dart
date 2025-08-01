@@ -16,28 +16,24 @@ class ClientDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 2, // Nous avons 2 onglets : Rendez-vous et Chat
       child: Scaffold(
         appBar: AppBar(
-          title: Text(userEmail),
+          title: Text(userEmail, style: const TextStyle(fontSize: 16)),
           backgroundColor: Colors.blue.shade800,
           bottom: const TabBar(
             indicatorColor: Colors.white,
             tabs: [
-              Tab(
-                icon: Icon(Icons.calendar_today),
-                text: 'Rendez-vous',
-              ),
-              Tab(
-                icon: Icon(Icons.chat_bubble),
-                text: 'Chat',
-              ),
+              Tab(icon: Icon(Icons.calendar_today), text: 'Rendez-vous'),
+              Tab(icon: Icon(Icons.chat_bubble), text: 'Chat'),
             ],
           ),
         ),
         body: TabBarView(
           children: [
+            // Onglet 1: Liste des rendez-vous
             AppointmentsList(userId: userId),
+            // Onglet 2: Interface de chat
             AdminChatView(userId: userId, userEmail: userEmail),
           ],
         ),
@@ -47,7 +43,7 @@ class ClientDetailsScreen extends StatelessWidget {
 }
 
 // ===============================================
-// == WIDGET POUR L'ONGLET DES RENDEZ-VOUS ==
+// == WIDGET POUR L'ONGLET DES RENDEZ-VOUS (MIS À JOUR) ==
 // ===============================================
 class AppointmentsList extends StatelessWidget {
   final String userId;
@@ -65,6 +61,9 @@ class AppointmentsList extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+        if (snapshot.hasError) {
+          return const Center(child: Text("Erreur de chargement des rendez-vous."));
+        }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(
             child: Text(
@@ -77,37 +76,60 @@ class AppointmentsList extends StatelessWidget {
         final appointments = snapshot.data!.docs;
 
         return ListView.builder(
-          padding: const EdgeInsets.all(8.0),
+          padding: const EdgeInsets.all(10.0),
           itemCount: appointments.length,
           itemBuilder: (context, index) {
             var appt = appointments[index].data() as Map<String, dynamic>;
+
+            // --- Logique pour afficher les informations de paiement ---
+            final totalAmount = appt['montant_total']?.toString() ?? 'N/A';
+            final paidAmount = appt['montant_envoye']?.toString() ?? 'N/A';
+            final paymentMethod = appt['methode_paiement'] ?? 'N/A';
+
             return Card(
-              elevation: 3,
+              elevation: 4,
               margin: const EdgeInsets.symmetric(vertical: 8.0),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: ListTile(
-                leading: const Icon(Icons.assignment, color: Colors.orange),
-                title: Text(
-                  appt['service'] ?? 'Service non spécifié',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                subtitle: Column(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Le ${appt['date']} à ${appt['time']}'),
-                    Text(appt['address'] ?? 'Adresse non fournie'),
+                    // --- EN-TÊTE DE LA CARTE ---
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            appt['service'] ?? 'Service',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue),
+                          ),
+                        ),
+                        Chip(
+                          label: Text(
+                            appt['status'] ?? 'En attente',
+                            style: const TextStyle(color: Colors.white, fontSize: 12),
+                          ),
+                          backgroundColor: Colors.orange.shade700,
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 20),
+
+                    // --- DÉTAILS DU RENDEZ-VOUS ---
+                    InfoRow(icon: Icons.calendar_today, text: '${appt['date']} à ${appt['time']}'),
+                    const SizedBox(height: 8),
+                    InfoRow(icon: Icons.location_on, text: appt['address'] ?? 'Adresse non fournie'),
+                    const SizedBox(height: 12),
+
+                    // --- SECTION PAIEMENT ---
+                    const Text("Détails du paiement", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
+                    const SizedBox(height: 8),
+                    InfoRow(icon: Icons.receipt_long, text: 'Total estimé: $totalAmount FCFA'),
+                    const SizedBox(height: 8),
+                    InfoRow(icon: Icons.payment, text: 'Avance payée: $paidAmount FCFA ($paymentMethod)'),
                   ],
                 ),
-                trailing: Chip(
-                  label: Text(
-                    appt['status'] ?? 'En attente',
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  backgroundColor: Colors.blue.shade700,
-                ),
-                isThreeLine: true,
               ),
             );
           },
@@ -117,8 +139,27 @@ class AppointmentsList extends StatelessWidget {
   }
 }
 
+// Petit widget pour uniformiser l'affichage des lignes d'information
+class InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const InfoRow({Key? key, required this.icon, required this.text}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: Colors.grey.shade600),
+        const SizedBox(width: 8),
+        Expanded(child: Text(text, style: const TextStyle(fontSize: 15))),
+      ],
+    );
+  }
+}
+
+
 // ===============================================
-// == WIDGET POUR L'ONGLET DU CHAT ==
+// == WIDGET POUR L'ONGLET DU CHAT (INCHANGÉ) ==
 // ===============================================
 class AdminChatView extends StatefulWidget {
   final String userId;
@@ -137,22 +178,20 @@ class _AdminChatViewState extends State<AdminChatView> {
 
     _textController.clear();
 
-    // On sauvegarde le message de l'admin
     FirebaseFirestore.instance
         .collection('chats')
         .doc(widget.userId)
         .collection('messages')
         .add({
       'text': text,
-      'senderId': 'admin', // Identifiant spécial pour l'administrateur
+      'senderId': 'admin',
       'timestamp': Timestamp.now(),
     });
 
-    // On met à jour la date du dernier message pour le tri
     FirebaseFirestore.instance.collection('chats').doc(widget.userId).set({
       'lastMessageAt': Timestamp.now(),
       'userEmail': widget.userEmail,
-    }, SetOptions(merge: true)); // merge: true pour ne pas écraser les autres champs
+    }, SetOptions(merge: true));
   }
 
   @override
@@ -190,9 +229,8 @@ class _AdminChatViewState extends State<AdminChatView> {
     );
   }
 
-  // Ce widget est une copie de celui du client, mais adapté pour l'admin
   Widget _buildMessageBubble(Map<String, dynamic> message) {
-    final isMe = message['senderId'] == 'admin'; // C'est "moi" si c'est l'admin qui envoie
+    final isMe = message['senderId'] == 'admin';
     final senderName = isMe ? 'Vous (Admin)' : widget.userEmail;
 
     return Container(
