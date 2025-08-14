@@ -1,9 +1,15 @@
-// lib/screens/client_details_screen.dart
+// PROJET ADMIN - Fichier : lib/screens/client_details_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import '../services/encryption_service.dart';
+import '../widgets/message_bubble.dart';
 
-class ClientDetailsScreen extends StatelessWidget {
+// WIDGET PRINCIPAL QUI GÈRE LES ONGLETS
+class ClientDetailsScreen extends StatefulWidget {
   final String userId;
   final String userEmail;
 
@@ -14,37 +20,116 @@ class ClientDetailsScreen extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  _ClientDetailsScreenState createState() => _ClientDetailsScreenState();
+}
+
+class _ClientDetailsScreenState extends State<ClientDetailsScreen> with TickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    initializeDateFormatting('fr_FR', null);
+    _tabController = TabController(length: 2, vsync: this);
+    // Gère la réinitialisation des compteurs de notification
+    _tabController.addListener(_handleTabSelection);
+    // Réinitialise le compteur du premier onglet dès l'ouverture
+    _resetCountersForCurrentTab(0);
+  }
+
+  void _handleTabSelection() {
+    if (_tabController.indexIsChanging) return;
+    _resetCountersForCurrentTab(_tabController.index);
+  }
+
+  void _resetCountersForCurrentTab(int index) {
+    final docRef = FirebaseFirestore.instance.collection('chats').doc(widget.userId);
+    // Onglet Rendez-vous
+    if (index == 0) {
+      docRef.set({'unreadAppointmentCountAdmin': 0}, SetOptions(merge: true));
+    }
+    // Onglet Chat
+    else if (index == 1) {
+      docRef.set({'unreadChatCountAdmin': 0}, SetOptions(merge: true));
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.removeListener(_handleTabSelection);
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2, // Nous avons 2 onglets : Rendez-vous et Chat
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(userEmail, style: const TextStyle(fontSize: 16)),
-          backgroundColor: Colors.blue.shade800,
-          bottom: const TabBar(
-            indicatorColor: Colors.white,
-            tabs: [
-              Tab(icon: Icon(Icons.calendar_today), text: 'Rendez-vous'),
-              Tab(icon: Icon(Icons.chat_bubble), text: 'Chat'),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            // Onglet 1: Liste des rendez-vous
-            AppointmentsList(userId: userId),
-            // Onglet 2: Interface de chat
-            AdminChatView(userId: userId, userEmail: userEmail),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.userEmail, style: const TextStyle(fontSize: 16)),
+        backgroundColor: Colors.blue.shade800,
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          tabs: [
+            // Onglet Rendez-vous avec son compteur de notifications
+            Tab(
+              child: StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance.collection('chats').doc(widget.userId).snapshots(),
+                builder: (context, snapshot) {
+                  final count = snapshot.data?.data() != null ? (snapshot.data!.data()! as Map<String, dynamic>)['unreadAppointmentCountAdmin'] ?? 0 : 0;
+                  return Badge(
+                    label: Text('$count'),
+                    isLabelVisible: count > 0,
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.calendar_today),
+                        SizedBox(width: 8),
+                        Text('RDV'),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            // Onglet Chat avec son compteur de notifications
+            Tab(
+              child: StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance.collection('chats').doc(widget.userId).snapshots(),
+                builder: (context, snapshot) {
+                  final count = snapshot.data?.data() != null ? (snapshot.data!.data()! as Map<String, dynamic>)['unreadChatCountAdmin'] ?? 0 : 0;
+                  return Badge(
+                    label: Text('$count'),
+                    isLabelVisible: count > 0,
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.chat_bubble),
+                        SizedBox(width: 8),
+                        Text('Chat'),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
           ],
         ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // Contenu du premier onglet
+          AppointmentsList(userId: widget.userId),
+          // Contenu du deuxième onglet
+          AdminChatView(userId: widget.userId),
+        ],
       ),
     );
   }
 }
 
-// ===============================================
-// == WIDGET POUR L'ONGLET DES RENDEZ-VOUS (MIS À JOUR) ==
-// ===============================================
+// WIDGET POUR AFFICHER LA LISTE DES RENDEZ-VOUS
 class AppointmentsList extends StatelessWidget {
   final String userId;
   const AppointmentsList({Key? key, required this.userId}) : super(key: key);
@@ -52,11 +137,7 @@ class AppointmentsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('appointments')
-          .where('userId', isEqualTo: userId)
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('appointments').where('userId', isEqualTo: userId).orderBy('createdAt', descending: true).snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -65,71 +146,25 @@ class AppointmentsList extends StatelessWidget {
           return const Center(child: Text("Erreur de chargement des rendez-vous."));
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(
-            child: Text(
-              'Aucun rendez-vous pour ce client.',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-          );
+          return const Center(child: Text('Aucun rendez-vous pour ce client.'));
         }
-
         final appointments = snapshot.data!.docs;
-
         return ListView.builder(
-          padding: const EdgeInsets.all(10.0),
+          padding: const EdgeInsets.all(8.0),
           itemCount: appointments.length,
           itemBuilder: (context, index) {
             var appt = appointments[index].data() as Map<String, dynamic>;
-
-            // --- Logique pour afficher les informations de paiement ---
-            final totalAmount = appt['montant_total']?.toString() ?? 'N/A';
-            final paidAmount = appt['montant_envoye']?.toString() ?? 'N/A';
-            final paymentMethod = appt['methode_paiement'] ?? 'N/A';
+            DateTime? createdAt = (appt['createdAt'] as Timestamp?)?.toDate();
+            String formattedDate = createdAt != null ? DateFormat('dd/MM/yyyy HH:mm').format(createdAt) : 'Date inconnue';
 
             return Card(
-              elevation: 4,
-              margin: const EdgeInsets.symmetric(vertical: 8.0),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // --- EN-TÊTE DE LA CARTE ---
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            appt['service'] ?? 'Service',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue),
-                          ),
-                        ),
-                        Chip(
-                          label: Text(
-                            appt['status'] ?? 'En attente',
-                            style: const TextStyle(color: Colors.white, fontSize: 12),
-                          ),
-                          backgroundColor: Colors.orange.shade700,
-                        ),
-                      ],
-                    ),
-                    const Divider(height: 20),
-
-                    // --- DÉTAILS DU RENDEZ-VOUS ---
-                    InfoRow(icon: Icons.calendar_today, text: '${appt['date']} à ${appt['time']}'),
-                    const SizedBox(height: 8),
-                    InfoRow(icon: Icons.location_on, text: appt['address'] ?? 'Adresse non fournie'),
-                    const SizedBox(height: 12),
-
-                    // --- SECTION PAIEMENT ---
-                    const Text("Détails du paiement", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
-                    const SizedBox(height: 8),
-                    InfoRow(icon: Icons.receipt_long, text: 'Total estimé: $totalAmount FCFA'),
-                    const SizedBox(height: 8),
-                    InfoRow(icon: Icons.payment, text: 'Avance payée: $paidAmount FCFA ($paymentMethod)'),
-                  ],
-                ),
+              elevation: 2,
+              margin: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 8.0),
+              child: ListTile(
+                title: Text(appt['service'] ?? 'Service non spécifié', style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text('Pris le: $formattedDate\nAdresse: ${appt['address'] ?? 'Non fournie'}'),
+                isThreeLine: true,
+                trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
               ),
             );
           },
@@ -139,59 +174,47 @@ class AppointmentsList extends StatelessWidget {
   }
 }
 
-// Petit widget pour uniformiser l'affichage des lignes d'information
-class InfoRow extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const InfoRow({Key? key, required this.icon, required this.text}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: Colors.grey.shade600),
-        const SizedBox(width: 8),
-        Expanded(child: Text(text, style: const TextStyle(fontSize: 15))),
-      ],
-    );
-  }
-}
-
-
-// ===============================================
-// == WIDGET POUR L'ONGLET DU CHAT (INCHANGÉ) ==
-// ===============================================
+// WIDGET POUR GÉRER TOUTE LA VUE DU CHAT
 class AdminChatView extends StatefulWidget {
   final String userId;
-  final String userEmail;
-  const AdminChatView({Key? key, required this.userId, required this.userEmail}) : super(key: key);
+  const AdminChatView({Key? key, required this.userId}) : super(key: key);
 
   @override
   _AdminChatViewState createState() => _AdminChatViewState();
 }
 
 class _AdminChatViewState extends State<AdminChatView> {
-  final TextEditingController _textController = TextEditingController();
+  final TextEditingController _messageController = TextEditingController();
+  final EncryptionService _encryptionService = EncryptionService();
+  final ItemScrollController _itemScrollController = ItemScrollController();
+  DocumentSnapshot? _replyingTo;
 
-  void _sendMessage(String text) {
-    if (text.trim().isEmpty) return;
+  void _sendMessage() async {
+    if (_messageController.text.trim().isEmpty) return;
 
-    _textController.clear();
+    // On s'assure de chiffrer le message de l'admin avant de l'envoyer.
+    final encryptedText = _encryptionService.encryptText(_messageController.text);
 
-    FirebaseFirestore.instance
-        .collection('chats')
-        .doc(widget.userId)
-        .collection('messages')
-        .add({
-      'text': text,
+    Map<String, dynamic> messageData = {
+      'text': encryptedText,
       'senderId': 'admin',
       'timestamp': Timestamp.now(),
-    });
+      if (_replyingTo != null)
+        'replyingTo': {'messageId': _replyingTo!.id, 'text': _replyingTo!['text']}
+    };
 
-    FirebaseFirestore.instance.collection('chats').doc(widget.userId).set({
-      'lastMessageAt': Timestamp.now(),
-      'userEmail': widget.userEmail,
-    }, SetOptions(merge: true));
+    await FirebaseFirestore.instance.collection('chats').doc(widget.userId).collection('messages').add(messageData);
+    await FirebaseFirestore.instance.collection('chats').doc(widget.userId).set({'lastMessageAt': Timestamp.now()}, SetOptions(merge: true));
+
+    _messageController.clear();
+    setState(() => _replyingTo = null);
+  }
+
+  void _scrollToMessage(String messageId, List<DocumentSnapshot> messages) {
+    final index = messages.indexWhere((doc) => doc.id == messageId);
+    if (index != -1) {
+      _itemScrollController.scrollTo(index: index, duration: const Duration(milliseconds: 500), curve: Curves.easeInOutCubic, alignment: 0.5);
+    }
   }
 
   @override
@@ -200,27 +223,19 @@ class _AdminChatViewState extends State<AdminChatView> {
       children: [
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('chats')
-                .doc(widget.userId)
-                .collection('messages')
-                .orderBy('timestamp', descending: true)
-                .snapshots(),
+            stream: FirebaseFirestore.instance.collection('chats').doc(widget.userId).collection('messages').orderBy('timestamp').snapshots(),
             builder: (context, snapshot) {
-              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+              if (snapshot.hasError) return Center(child: Text('Erreur de connexion: ${snapshot.error}'));
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("Commencez la conversation."));
+
               final messages = snapshot.data!.docs;
-
-              if(messages.isEmpty) return const Center(child: Text("Aucun message."));
-
-              return ListView.builder(
-                padding: const EdgeInsets.all(8.0),
-                reverse: true,
-                itemCount: messages.length,
-                itemBuilder: (context, index) {
-                  var message = messages[index].data() as Map<String, dynamic>;
-                  return _buildMessageBubble(message);
-                },
-              );
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_itemScrollController.isAttached) {
+                  _itemScrollController.jumpTo(index: messages.length - 1);
+                }
+              });
+              return _buildMessagesList(messages);
             },
           ),
         ),
@@ -229,64 +244,127 @@ class _AdminChatViewState extends State<AdminChatView> {
     );
   }
 
-  Widget _buildMessageBubble(Map<String, dynamic> message) {
-    final isMe = message['senderId'] == 'admin';
-    final senderName = isMe ? 'Vous (Admin)' : widget.userEmail;
+  Widget _buildMessagesList(List<DocumentSnapshot> messages) {
+    return ScrollablePositionedList.builder(
+      itemCount: messages.length,
+      itemScrollController: _itemScrollController,
+      itemBuilder: (context, index) {
+        final messageDoc = messages[index];
+        final messageData = messageDoc.data() as Map<String, dynamic>;
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 5.0),
-      child: Row(
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-            decoration: BoxDecoration(
-              color: isMe ? Colors.green.shade600 : Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  senderName,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: isMe ? Colors.white : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  message['text'] ?? '',
-                  style: TextStyle(color: isMe ? Colors.white : Colors.black87),
-                ),
-              ],
-            ),
+        final decryptedText = _encryptionService.decryptText(messageData['text']);
+        final messageTimestamp = (messageData['timestamp'] as Timestamp).toDate();
+        final isMe = messageData['senderId'] == 'admin';
+
+        final replyData = messageData['replyingTo'] as Map<String, dynamic>?;
+        final decryptedRepliedText = replyData != null ? _encryptionService.decryptText(replyData['text']) : null;
+
+        bool showDateSeparator = false;
+        if (index == 0) {
+          showDateSeparator = true;
+        } else {
+          final prevTimestamp = (messages[index-1]['timestamp'] as Timestamp).toDate();
+          if (messageTimestamp.day != prevTimestamp.day || messageTimestamp.month != prevTimestamp.month || messageTimestamp.year != prevTimestamp.year) {
+            showDateSeparator = true;
+          }
+        }
+
+        final messageBubble = Dismissible(
+          key: Key(messageDoc.id),
+          direction: DismissDirection.startToEnd,
+          onDismissed: (_) { setState(() { _replyingTo = messageDoc; }); },
+          background: Container(
+            color: Colors.blue.shade100,
+            alignment: Alignment.centerLeft,
+            child: const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Icon(Icons.reply, color: Colors.blue)),
           ),
-        ],
+          child: MessageBubble(
+            text: decryptedText,
+            timestamp: messageTimestamp,
+            isMe: isMe,
+            repliedText: decryptedRepliedText,
+            onQuoteTap: replyData == null ? null : () => _scrollToMessage(replyData['messageId'], messages),
+          ),
+        );
+
+        if (showDateSeparator) {
+          return Column(children: [_buildDateSeparator(messageTimestamp), messageBubble]);
+        }
+        return messageBubble;
+      },
+    );
+  }
+
+  Widget _buildDateSeparator(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final dateToCompare = DateTime(date.year, date.month, date.day);
+
+    String text;
+    if (dateToCompare == today) {
+      text = "Aujourd'hui";
+    } else if (dateToCompare == yesterday) {
+      text = "Hier";
+    } else {
+      text = DateFormat.yMMMMEEEEd('fr_FR').format(date);
+    }
+
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 10.0),
+        padding: const EdgeInsets.symmetric(vertical: 5.0, horizontal: 12.0),
+        decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(12)),
+        child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
       ),
     );
   }
 
   Widget _buildMessageComposer() {
+    final replyingToText = _replyingTo != null ? _encryptionService.decryptText(_replyingTo!['text']) : null;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: Row(
+      padding: const EdgeInsets.all(8.0),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        boxShadow: [BoxShadow(blurRadius: 3, color: Colors.grey.withOpacity(0.2), spreadRadius: 1)],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: TextField(
-              controller: _textController,
-              decoration: const InputDecoration.collapsed(
-                hintText: 'Répondre au client...',
+          if (_replyingTo != null)
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12))),
+              child: Row(
+                children: [
+                  const Icon(Icons.reply, color: Colors.blue, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text("En réponse à : $replyingToText", overflow: TextOverflow.ellipsis, style: const TextStyle(fontStyle: FontStyle.italic))),
+                  IconButton(icon: const Icon(Icons.close, size: 20), onPressed: () => setState(() => _replyingTo = null)),
+                ],
               ),
-              onSubmitted: _sendMessage,
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.send),
-            onPressed: () => _sendMessage(_textController.text),
-            color: Theme.of(context).primaryColor,
+          SafeArea(
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    decoration: InputDecoration(
+                      hintText: 'Répondre au client...',
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(30.0), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    ),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(icon: const Icon(Icons.send), onPressed: _sendMessage, color: Theme.of(context).primaryColor),
+              ],
+            ),
           ),
         ],
       ),
