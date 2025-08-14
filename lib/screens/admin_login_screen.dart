@@ -12,8 +12,8 @@ class AdminLoginScreen extends StatefulWidget {
 class _AdminLoginScreenState extends State<AdminLoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final String _adminEmail = "Kammeugnejulio41@gmail.com"; // Votre email admin
-  final String _adminPassword = "123456789"; // Votre mot de passe admin
+  final String _adminEmail = "Kammeugnejulio41@gmail.com";
+  final String _adminPassword = "123456789";
 
   void _login() {
     if (_emailController.text == _adminEmail && _passwordController.text == _adminPassword) {
