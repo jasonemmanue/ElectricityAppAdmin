@@ -5,7 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import '../services/encryption_service.dart';
 import '../widgets/message_bubble.dart';
 
 // WIDGET PRINCIPAL QUI GÈRE LES ONGLETS
@@ -31,9 +30,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> with TickerPr
     super.initState();
     initializeDateFormatting('fr_FR', null);
     _tabController = TabController(length: 2, vsync: this);
-    // Gère la réinitialisation des compteurs de notification
     _tabController.addListener(_handleTabSelection);
-    // Réinitialise le compteur du premier onglet dès l'ouverture
     _resetCountersForCurrentTab(0);
   }
 
@@ -44,11 +41,9 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> with TickerPr
 
   void _resetCountersForCurrentTab(int index) {
     final docRef = FirebaseFirestore.instance.collection('chats').doc(widget.userId);
-    // Onglet Rendez-vous
     if (index == 0) {
       docRef.set({'unreadAppointmentCountAdmin': 0}, SetOptions(merge: true));
     }
-    // Onglet Chat
     else if (index == 1) {
       docRef.set({'unreadChatCountAdmin': 0}, SetOptions(merge: true));
     }
@@ -71,7 +66,6 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> with TickerPr
           controller: _tabController,
           indicatorColor: Colors.white,
           tabs: [
-            // Onglet Rendez-vous avec son compteur de notifications
             Tab(
               child: StreamBuilder<DocumentSnapshot>(
                 stream: FirebaseFirestore.instance.collection('chats').doc(widget.userId).snapshots(),
@@ -92,7 +86,6 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> with TickerPr
                 },
               ),
             ),
-            // Onglet Chat avec son compteur de notifications
             Tab(
               child: StreamBuilder<DocumentSnapshot>(
                 stream: FirebaseFirestore.instance.collection('chats').doc(widget.userId).snapshots(),
@@ -119,9 +112,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> with TickerPr
       body: TabBarView(
         controller: _tabController,
         children: [
-          // Contenu du premier onglet
           AppointmentsList(userId: widget.userId),
-          // Contenu du deuxième onglet
           AdminChatView(userId: widget.userId),
         ],
       ),
@@ -185,18 +176,14 @@ class AdminChatView extends StatefulWidget {
 
 class _AdminChatViewState extends State<AdminChatView> {
   final TextEditingController _messageController = TextEditingController();
-  final EncryptionService _encryptionService = EncryptionService();
   final ItemScrollController _itemScrollController = ItemScrollController();
   DocumentSnapshot? _replyingTo;
 
   void _sendMessage() async {
     if (_messageController.text.trim().isEmpty) return;
 
-    // On s'assure de chiffrer le message de l'admin avant de l'envoyer.
-    final encryptedText = _encryptionService.encryptText(_messageController.text);
-
     Map<String, dynamic> messageData = {
-      'text': encryptedText,
+      'text': _messageController.text, // Envoie le texte brut
       'senderId': 'admin',
       'timestamp': Timestamp.now(),
       if (_replyingTo != null)
@@ -252,12 +239,12 @@ class _AdminChatViewState extends State<AdminChatView> {
         final messageDoc = messages[index];
         final messageData = messageDoc.data() as Map<String, dynamic>;
 
-        final decryptedText = _encryptionService.decryptText(messageData['text']);
+        final plainText = messageData['text'] as String? ?? ''; // Lit le texte brut
         final messageTimestamp = (messageData['timestamp'] as Timestamp).toDate();
         final isMe = messageData['senderId'] == 'admin';
 
         final replyData = messageData['replyingTo'] as Map<String, dynamic>?;
-        final decryptedRepliedText = replyData != null ? _encryptionService.decryptText(replyData['text']) : null;
+        final repliedTextPlain = replyData != null ? replyData['text'] as String? : null; // Lit le texte brut du message cité
 
         bool showDateSeparator = false;
         if (index == 0) {
@@ -279,10 +266,10 @@ class _AdminChatViewState extends State<AdminChatView> {
             child: const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Icon(Icons.reply, color: Colors.blue)),
           ),
           child: MessageBubble(
-            text: decryptedText,
+            text: plainText,
             timestamp: messageTimestamp,
             isMe: isMe,
-            repliedText: decryptedRepliedText,
+            repliedText: repliedTextPlain,
             onQuoteTap: replyData == null ? null : () => _scrollToMessage(replyData['messageId'], messages),
           ),
         );
@@ -321,7 +308,7 @@ class _AdminChatViewState extends State<AdminChatView> {
   }
 
   Widget _buildMessageComposer() {
-    final replyingToText = _replyingTo != null ? _encryptionService.decryptText(_replyingTo!['text']) : null;
+    final replyingToText = _replyingTo != null ? _replyingTo!['text'] as String? : null;
 
     return Container(
       padding: const EdgeInsets.all(8.0),

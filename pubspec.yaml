@@ -31,6 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
   intl: ^0.20.2
+  flutter_native_splash: ^2.4.0
 
   # --- MISES À JOUR DES VERSIONS FIREBASE ---
   firebase_core: ^4.0.0
@@ -39,7 +40,6 @@ dependencies:
   provider: ^6.1.2
   shared_preferences: ^2.2.2
   scrollable_positioned_list: ^0.3.8
-  encrypt: ^5.0.3
 
   cupertino_icons: ^1.0.8
 
@@ -53,12 +53,15 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
 flutter:
+  assets:
+    - assets/icon/
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
@@ -95,3 +98,11 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/Logososelectricityapp.jpg"
+  min_sdk_android: 21
+flutter_native_splash:
+  color: "#FFFFFF" # Fond blanc
+  image: assets/icon/Logososelectricityapp.jpg
