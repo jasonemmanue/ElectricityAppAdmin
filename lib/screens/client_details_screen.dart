@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../widgets/message_bubble.dart';
+import 'map_screen.dart'; // Importez le nouvel écran de carte
 
 // WIDGET PRINCIPAL QUI GÈRE LES ONGLETS
 class ClientDetailsScreen extends StatefulWidget {
@@ -147,6 +148,7 @@ class AppointmentsList extends StatelessWidget {
             var appt = appointments[index].data() as Map<String, dynamic>;
             DateTime? createdAt = (appt['createdAt'] as Timestamp?)?.toDate();
             String formattedDate = createdAt != null ? DateFormat('dd/MM/yyyy HH:mm').format(createdAt) : 'Date inconnue';
+            GeoPoint? location = appt['location'];
 
             return Card(
               elevation: 2,
@@ -155,7 +157,20 @@ class AppointmentsList extends StatelessWidget {
                 title: Text(appt['service'] ?? 'Service non spécifié', style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text('Pris le: $formattedDate\nAdresse: ${appt['address'] ?? 'Non fournie'}'),
                 isThreeLine: true,
-                trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                trailing: location != null
+                    ? IconButton(
+                  icon: const Icon(Icons.map, color: Colors.blueAccent),
+                  tooltip: 'Voir sur la carte',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MapScreen(location: location),
+                      ),
+                    );
+                  },
+                )
+                    : const Icon(Icons.location_off, size: 20, color: Colors.grey),
               ),
             );
           },
