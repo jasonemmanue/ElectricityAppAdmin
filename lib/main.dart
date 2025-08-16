@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:timezone/data/latest.dart' as tz; // <-- Importer timezone
 import 'firebase_options.dart';
 import 'screens/admin_login_screen.dart';
-import 'screens/animated_loading_screen.dart'; // <-- 1. Importez l'écran de chargement animé
+import 'screens/animated_loading_screen.dart';
+import 'services/notification_service.dart';
 
 void main() async {
-  // Assure que les bindings Flutter sont prêts avant d'exécuter du code natif
+  // Assure que les bindings Flutter sont prêts
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialise Firebase pour votre projet
+  // **NOUVEAU : Initialise la base de données des fuseaux horaires**
+  tz.initializeTimeZones();
+
+  // Initialise Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Initialise notre service de notification
+  await NotificationService().init();
 
   runApp(const MyApp());
 }
@@ -22,14 +30,10 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const MaterialApp(
-      title: 'SosElectricityadmin', // Le nom de votre application
-
-      // 2. Définissez l'écran de chargement comme page d'accueil.
-      // Il s'occupera de naviguer vers AdminLoginScreen après l'animation.
+      title: 'SosElectricityadmin',
       home: AnimatedLoadingScreen(
         nextScreen: AdminLoginScreen(),
       ),
-
       debugShowCheckedModeBanner: false,
     );
   }

@@ -5,8 +5,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import '../services/notification_service.dart';
 import '../widgets/message_bubble.dart';
-import 'map_screen.dart'; // Importez le nouvel écran de carte
+import 'map_screen.dart';
 
 // WIDGET PRINCIPAL QUI GÈRE LES ONGLETS
 class ClientDetailsScreen extends StatefulWidget {
@@ -128,7 +129,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          AppointmentsList(userId: widget.userId),
+          AppointmentsList(userId: widget.userId, userEmail: widget.userEmail),
           AdminChatView(userId: widget.userId),
         ],
       ),
@@ -139,13 +140,89 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
 // WIDGET POUR AFFICHER LA LISTE DES RENDEZ-VOUS
 class AppointmentsList extends StatelessWidget {
   final String userId;
-  const AppointmentsList({Key? key, required this.userId}) : super(key: key);
+  final String userEmail;
+  const AppointmentsList({Key? key, required this.userId, required this.userEmail}) : super(key: key);
 
   void _updateAppointmentStatus(String appointmentId, String status) {
     FirebaseFirestore.instance
         .collection('appointments')
         .doc(appointmentId)
         .update({'status': status});
+  }
+
+  Future<void> _scheduleOrUpdateReminder(BuildContext context, DocumentSnapshot appointmentDoc) async {
+    var appt = appointmentDoc.data() as Map<String, dynamic>;
+    DateTime? createdAt = (appt['createdAt'] as Timestamp?)?.toDate();
+    if (createdAt == null) return;
+
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+
+    if (pickedDate == null) return;
+
+    final TimeOfDay? pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(createdAt),
+    );
+
+    if (pickedTime == null) return;
+
+    final DateTime finalDateTime = DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      pickedTime.hour,
+      pickedTime.minute,
+    );
+
+    if (finalDateTime.isBefore(DateTime.now())) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible de programmer un rappel dans le passé.')),
+      );
+      return;
+    }
+
+    final notificationId = appointmentDoc.id.hashCode;
+
+    await NotificationService().scheduleNotification(
+      notificationId,
+      'Rappel de rendez-vous',
+      'Rendez-vous pour ${appt['service']} avec $userEmail.',
+      finalDateTime,
+    );
+
+    await FirebaseFirestore.instance.collection('appointments').doc(appointmentDoc.id).update({
+      'reminder': {
+        'notificationId': notificationId,
+        'scheduledAt': Timestamp.fromDate(finalDateTime),
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Rappel programmé pour ${DateFormat('dd/MM/yyyy HH:mm').format(finalDateTime)}')),
+    );
+  }
+
+  Future<void> _cancelReminder(BuildContext context, DocumentSnapshot appointmentDoc) async {
+    var appt = appointmentDoc.data() as Map<String, dynamic>;
+    final reminderData = appt['reminder'] as Map<String, dynamic>?;
+
+    if (reminderData != null && reminderData['notificationId'] != null) {
+      final notificationId = reminderData['notificationId'];
+      await NotificationService().cancelNotification(notificationId);
+
+      await FirebaseFirestore.instance.collection('appointments').doc(appointmentDoc.id).update({
+        'reminder': FieldValue.delete(),
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Rappel annulé.')),
+      );
+    }
   }
 
   @override
@@ -177,16 +254,19 @@ class AppointmentsList extends StatelessWidget {
             var appt = appointmentDoc.data() as Map<String, dynamic>;
             DateTime? createdAt = (appt['createdAt'] as Timestamp?)?.toDate();
             String formattedDate = createdAt != null
-                ? DateFormat('dd/MM/yyyy HH:mm').format(createdAt)
+                ? DateFormat('dd/MM/yyyy HH:mm', 'fr_FR').format(createdAt)
                 : 'Date inconnue';
             GeoPoint? location = appt['location'];
             String status = appt['status'] ?? 'En attente';
+            final reminderData = appt['reminder'] as Map<String, dynamic>?;
+            final bool isReminderSet = reminderData != null && reminderData['scheduledAt'] != null;
 
             return Card(
               elevation: 2,
               margin:
               const EdgeInsets.symmetric(vertical: 6.0, horizontal: 8.0),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   ListTile(
                     title: Text(appt['service'] ?? 'Service non spécifié',
@@ -212,10 +292,20 @@ class AppointmentsList extends StatelessWidget {
                         : const Icon(Icons.location_off,
                         size: 20, color: Colors.grey),
                   ),
-                  if (status == 'En attente')
-                    ButtonBar(
-                      alignment: MainAxisAlignment.center,
-                      children: [
+
+                  if (isReminderSet)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                      child: Text(
+                        'Rappel programmé pour le ${DateFormat('dd/MM/yyyy à HH:mm', 'fr_FR').format((reminderData!['scheduledAt'] as Timestamp).toDate())}',
+                        style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.blue),
+                      ),
+                    ),
+
+                  ButtonBar(
+                    alignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      if (status == 'En attente') ...[
                         TextButton.icon(
                           icon: const Icon(Icons.check_circle, color: Colors.green),
                           label: const Text('Accepter'),
@@ -227,7 +317,19 @@ class AppointmentsList extends StatelessWidget {
                           onPressed: () => _updateAppointmentStatus(appointmentDoc.id, 'Refusé'),
                         ),
                       ],
-                    ),
+                      TextButton.icon(
+                        icon: Icon(isReminderSet ? Icons.edit_notifications : Icons.add_alarm, color: Colors.orange),
+                        label: Text(isReminderSet ? 'Modifier' : 'Rappel'),
+                        onPressed: () => _scheduleOrUpdateReminder(context, appointmentDoc),
+                      ),
+                      if (isReminderSet)
+                        TextButton.icon(
+                          icon: const Icon(Icons.notifications_off, color: Colors.grey),
+                          label: const Text('Annuler'),
+                          onPressed: () => _cancelReminder(context, appointmentDoc),
+                        ),
+                    ],
+                  ),
                 ],
               ),
             );
@@ -256,7 +358,7 @@ class _AdminChatViewState extends State<AdminChatView> {
     if (_messageController.text.trim().isEmpty) return;
 
     Map<String, dynamic> messageData = {
-      'text': _messageController.text, // Envoie le texte brut
+      'text': _messageController.text,
       'senderId': 'admin',
       'timestamp': Timestamp.now(),
       if (_replyingTo != null)
@@ -336,7 +438,7 @@ class _AdminChatViewState extends State<AdminChatView> {
         final messageData = messageDoc.data() as Map<String, dynamic>;
 
         final plainText =
-            messageData['text'] as String? ?? ''; // Lit le texte brut
+            messageData['text'] as String? ?? '';
         final messageTimestamp =
         (messageData['timestamp'] as Timestamp).toDate();
         final isMe = messageData['senderId'] == 'admin';
@@ -344,7 +446,7 @@ class _AdminChatViewState extends State<AdminChatView> {
         final replyData = messageData['replyingTo'] as Map<String, dynamic>?;
         final repliedTextPlain = replyData != null
             ? replyData['text'] as String?
-            : null; // Lit le texte brut du message cité
+            : null;
 
         bool showDateSeparator = false;
         if (index == 0) {
