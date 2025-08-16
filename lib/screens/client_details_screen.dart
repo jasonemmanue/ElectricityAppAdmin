@@ -23,7 +23,8 @@ class ClientDetailsScreen extends StatefulWidget {
   _ClientDetailsScreenState createState() => _ClientDetailsScreenState();
 }
 
-class _ClientDetailsScreenState extends State<ClientDetailsScreen> with TickerProviderStateMixin {
+class _ClientDetailsScreenState extends State<ClientDetailsScreen>
+    with TickerProviderStateMixin {
   late TabController _tabController;
 
   @override
@@ -41,11 +42,11 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> with TickerPr
   }
 
   void _resetCountersForCurrentTab(int index) {
-    final docRef = FirebaseFirestore.instance.collection('chats').doc(widget.userId);
+    final docRef =
+    FirebaseFirestore.instance.collection('chats').doc(widget.userId);
     if (index == 0) {
       docRef.set({'unreadAppointmentCountAdmin': 0}, SetOptions(merge: true));
-    }
-    else if (index == 1) {
+    } else if (index == 1) {
       docRef.set({'unreadChatCountAdmin': 0}, SetOptions(merge: true));
     }
   }
@@ -69,9 +70,16 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> with TickerPr
           tabs: [
             Tab(
               child: StreamBuilder<DocumentSnapshot>(
-                stream: FirebaseFirestore.instance.collection('chats').doc(widget.userId).snapshots(),
+                stream: FirebaseFirestore.instance
+                    .collection('chats')
+                    .doc(widget.userId)
+                    .snapshots(),
                 builder: (context, snapshot) {
-                  final count = snapshot.data?.data() != null ? (snapshot.data!.data()! as Map<String, dynamic>)['unreadAppointmentCountAdmin'] ?? 0 : 0;
+                  final count = snapshot.data?.data() != null
+                      ? (snapshot.data!.data()!
+                  as Map<String, dynamic>)['unreadAppointmentCountAdmin'] ??
+                      0
+                      : 0;
                   return Badge(
                     label: Text('$count'),
                     isLabelVisible: count > 0,
@@ -89,9 +97,16 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> with TickerPr
             ),
             Tab(
               child: StreamBuilder<DocumentSnapshot>(
-                stream: FirebaseFirestore.instance.collection('chats').doc(widget.userId).snapshots(),
+                stream: FirebaseFirestore.instance
+                    .collection('chats')
+                    .doc(widget.userId)
+                    .snapshots(),
                 builder: (context, snapshot) {
-                  final count = snapshot.data?.data() != null ? (snapshot.data!.data()! as Map<String, dynamic>)['unreadChatCountAdmin'] ?? 0 : 0;
+                  final count = snapshot.data?.data() != null
+                      ? (snapshot.data!.data()!
+                  as Map<String, dynamic>)['unreadChatCountAdmin'] ??
+                      0
+                      : 0;
                   return Badge(
                     label: Text('$count'),
                     isLabelVisible: count > 0,
@@ -126,51 +141,94 @@ class AppointmentsList extends StatelessWidget {
   final String userId;
   const AppointmentsList({Key? key, required this.userId}) : super(key: key);
 
+  void _updateAppointmentStatus(String appointmentId, String status) {
+    FirebaseFirestore.instance
+        .collection('appointments')
+        .doc(appointmentId)
+        .update({'status': status});
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('appointments').where('userId', isEqualTo: userId).orderBy('createdAt', descending: true).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('appointments')
+          .where('userId', isEqualTo: userId)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError) {
-          return const Center(child: Text("Erreur de chargement des rendez-vous."));
+          return const Center(
+              child: Text("Erreur de chargement des rendez-vous."));
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text('Aucun rendez-vous pour ce client.'));
+          return const Center(
+              child: Text('Aucun rendez-vous pour ce client.'));
         }
         final appointments = snapshot.data!.docs;
         return ListView.builder(
           padding: const EdgeInsets.all(8.0),
           itemCount: appointments.length,
           itemBuilder: (context, index) {
-            var appt = appointments[index].data() as Map<String, dynamic>;
+            var appointmentDoc = appointments[index];
+            var appt = appointmentDoc.data() as Map<String, dynamic>;
             DateTime? createdAt = (appt['createdAt'] as Timestamp?)?.toDate();
-            String formattedDate = createdAt != null ? DateFormat('dd/MM/yyyy HH:mm').format(createdAt) : 'Date inconnue';
+            String formattedDate = createdAt != null
+                ? DateFormat('dd/MM/yyyy HH:mm').format(createdAt)
+                : 'Date inconnue';
             GeoPoint? location = appt['location'];
+            String status = appt['status'] ?? 'En attente';
 
             return Card(
               elevation: 2,
-              margin: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 8.0),
-              child: ListTile(
-                title: Text(appt['service'] ?? 'Service non spécifié', style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('Pris le: $formattedDate\nAdresse: ${appt['address'] ?? 'Non fournie'}'),
-                isThreeLine: true,
-                trailing: location != null
-                    ? IconButton(
-                  icon: const Icon(Icons.map, color: Colors.blueAccent),
-                  tooltip: 'Voir sur la carte',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => MapScreen(location: location),
-                      ),
-                    );
-                  },
-                )
-                    : const Icon(Icons.location_off, size: 20, color: Colors.grey),
+              margin:
+              const EdgeInsets.symmetric(vertical: 6.0, horizontal: 8.0),
+              child: Column(
+                children: [
+                  ListTile(
+                    title: Text(appt['service'] ?? 'Service non spécifié',
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(
+                        'Pris le: $formattedDate\nAdresse: ${appt['address'] ?? 'Non fournie'}'),
+                    isThreeLine: true,
+                    trailing: location != null
+                        ? IconButton(
+                      icon: const Icon(Icons.map,
+                          color: Colors.blueAccent),
+                      tooltip: 'Voir sur la carte',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                MapScreen(location: location),
+                          ),
+                        );
+                      },
+                    )
+                        : const Icon(Icons.location_off,
+                        size: 20, color: Colors.grey),
+                  ),
+                  if (status == 'En attente')
+                    ButtonBar(
+                      alignment: MainAxisAlignment.center,
+                      children: [
+                        TextButton.icon(
+                          icon: const Icon(Icons.check_circle, color: Colors.green),
+                          label: const Text('Accepter'),
+                          onPressed: () => _updateAppointmentStatus(appointmentDoc.id, 'Accepté'),
+                        ),
+                        TextButton.icon(
+                          icon: const Icon(Icons.cancel, color: Colors.red),
+                          label: const Text('Refuser'),
+                          onPressed: () => _updateAppointmentStatus(appointmentDoc.id, 'Refusé'),
+                        ),
+                      ],
+                    ),
+                ],
               ),
             );
           },
@@ -202,11 +260,21 @@ class _AdminChatViewState extends State<AdminChatView> {
       'senderId': 'admin',
       'timestamp': Timestamp.now(),
       if (_replyingTo != null)
-        'replyingTo': {'messageId': _replyingTo!.id, 'text': _replyingTo!['text']}
+        'replyingTo': {
+          'messageId': _replyingTo!.id,
+          'text': _replyingTo!['text']
+        }
     };
 
-    await FirebaseFirestore.instance.collection('chats').doc(widget.userId).collection('messages').add(messageData);
-    await FirebaseFirestore.instance.collection('chats').doc(widget.userId).set({'lastMessageAt': Timestamp.now()}, SetOptions(merge: true));
+    await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(widget.userId)
+        .collection('messages')
+        .add(messageData);
+    await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(widget.userId)
+        .set({'lastMessageAt': Timestamp.now()}, SetOptions(merge: true));
 
     _messageController.clear();
     setState(() => _replyingTo = null);
@@ -215,7 +283,11 @@ class _AdminChatViewState extends State<AdminChatView> {
   void _scrollToMessage(String messageId, List<DocumentSnapshot> messages) {
     final index = messages.indexWhere((doc) => doc.id == messageId);
     if (index != -1) {
-      _itemScrollController.scrollTo(index: index, duration: const Duration(milliseconds: 500), curve: Curves.easeInOutCubic, alignment: 0.5);
+      _itemScrollController.scrollTo(
+          index: index,
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.easeInOutCubic,
+          alignment: 0.5);
     }
   }
 
@@ -225,11 +297,20 @@ class _AdminChatViewState extends State<AdminChatView> {
       children: [
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('chats').doc(widget.userId).collection('messages').orderBy('timestamp').snapshots(),
+            stream: FirebaseFirestore.instance
+                .collection('chats')
+                .doc(widget.userId)
+                .collection('messages')
+                .orderBy('timestamp')
+                .snapshots(),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-              if (snapshot.hasError) return Center(child: Text('Erreur de connexion: ${snapshot.error}'));
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("Commencez la conversation."));
+              if (snapshot.connectionState == ConnectionState.waiting)
+                return const Center(child: CircularProgressIndicator());
+              if (snapshot.hasError)
+                return Center(
+                    child: Text('Erreur de connexion: ${snapshot.error}'));
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty)
+                return const Center(child: Text("Commencez la conversation."));
 
               final messages = snapshot.data!.docs;
               WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -254,19 +335,26 @@ class _AdminChatViewState extends State<AdminChatView> {
         final messageDoc = messages[index];
         final messageData = messageDoc.data() as Map<String, dynamic>;
 
-        final plainText = messageData['text'] as String? ?? ''; // Lit le texte brut
-        final messageTimestamp = (messageData['timestamp'] as Timestamp).toDate();
+        final plainText =
+            messageData['text'] as String? ?? ''; // Lit le texte brut
+        final messageTimestamp =
+        (messageData['timestamp'] as Timestamp).toDate();
         final isMe = messageData['senderId'] == 'admin';
 
         final replyData = messageData['replyingTo'] as Map<String, dynamic>?;
-        final repliedTextPlain = replyData != null ? replyData['text'] as String? : null; // Lit le texte brut du message cité
+        final repliedTextPlain = replyData != null
+            ? replyData['text'] as String?
+            : null; // Lit le texte brut du message cité
 
         bool showDateSeparator = false;
         if (index == 0) {
           showDateSeparator = true;
         } else {
-          final prevTimestamp = (messages[index-1]['timestamp'] as Timestamp).toDate();
-          if (messageTimestamp.day != prevTimestamp.day || messageTimestamp.month != prevTimestamp.month || messageTimestamp.year != prevTimestamp.year) {
+          final prevTimestamp =
+          (messages[index - 1]['timestamp'] as Timestamp).toDate();
+          if (messageTimestamp.day != prevTimestamp.day ||
+              messageTimestamp.month != prevTimestamp.month ||
+              messageTimestamp.year != prevTimestamp.year) {
             showDateSeparator = true;
           }
         }
@@ -274,23 +362,32 @@ class _AdminChatViewState extends State<AdminChatView> {
         final messageBubble = Dismissible(
           key: Key(messageDoc.id),
           direction: DismissDirection.startToEnd,
-          onDismissed: (_) { setState(() { _replyingTo = messageDoc; }); },
+          onDismissed: (_) {
+            setState(() {
+              _replyingTo = messageDoc;
+            });
+          },
           background: Container(
             color: Colors.blue.shade100,
             alignment: Alignment.centerLeft,
-            child: const Padding(padding: EdgeInsets.symmetric(horizontal: 20), child: Icon(Icons.reply, color: Colors.blue)),
+            child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: Icon(Icons.reply, color: Colors.blue)),
           ),
           child: MessageBubble(
             text: plainText,
             timestamp: messageTimestamp,
             isMe: isMe,
             repliedText: repliedTextPlain,
-            onQuoteTap: replyData == null ? null : () => _scrollToMessage(replyData['messageId'], messages),
+            onQuoteTap: replyData == null
+                ? null
+                : () => _scrollToMessage(replyData['messageId'], messages),
           ),
         );
 
         if (showDateSeparator) {
-          return Column(children: [_buildDateSeparator(messageTimestamp), messageBubble]);
+          return Column(
+              children: [_buildDateSeparator(messageTimestamp), messageBubble]);
         }
         return messageBubble;
       },
@@ -316,20 +413,30 @@ class _AdminChatViewState extends State<AdminChatView> {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 10.0),
         padding: const EdgeInsets.symmetric(vertical: 5.0, horizontal: 12.0),
-        decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(12)),
-        child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
+        decoration: BoxDecoration(
+            color: Colors.grey.shade300,
+            borderRadius: BorderRadius.circular(12)),
+        child: Text(text,
+            style:
+            const TextStyle(fontWeight: FontWeight.bold, color: Colors.black54)),
       ),
     );
   }
 
   Widget _buildMessageComposer() {
-    final replyingToText = _replyingTo != null ? _replyingTo!['text'] as String? : null;
+    final replyingToText =
+    _replyingTo != null ? _replyingTo!['text'] as String? : null;
 
     return Container(
       padding: const EdgeInsets.all(8.0),
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
-        boxShadow: [BoxShadow(blurRadius: 3, color: Colors.grey.withOpacity(0.2), spreadRadius: 1)],
+        boxShadow: [
+          BoxShadow(
+              blurRadius: 3,
+              color: Colors.grey.withOpacity(0.2),
+              spreadRadius: 1)
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -337,13 +444,22 @@ class _AdminChatViewState extends State<AdminChatView> {
           if (_replyingTo != null)
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12))),
+              decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      topRight: Radius.circular(12))),
               child: Row(
                 children: [
                   const Icon(Icons.reply, color: Colors.blue, size: 20),
                   const SizedBox(width: 8),
-                  Expanded(child: Text("En réponse à : $replyingToText", overflow: TextOverflow.ellipsis, style: const TextStyle(fontStyle: FontStyle.italic))),
-                  IconButton(icon: const Icon(Icons.close, size: 20), onPressed: () => setState(() => _replyingTo = null)),
+                  Expanded(
+                      child: Text("En réponse à : $replyingToText",
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontStyle: FontStyle.italic))),
+                  IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: () => setState(() => _replyingTo = null)),
                 ],
               ),
             ),
@@ -357,14 +473,20 @@ class _AdminChatViewState extends State<AdminChatView> {
                       hintText: 'Répondre au client...',
                       filled: true,
                       fillColor: Colors.grey.shade100,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(30.0), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(30.0),
+                          borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
                     ),
                     onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton(icon: const Icon(Icons.send), onPressed: _sendMessage, color: Theme.of(context).primaryColor),
+                IconButton(
+                    icon: const Icon(Icons.send),
+                    onPressed: _sendMessage,
+                    color: Theme.of(context).primaryColor),
               ],
             ),
           ),
