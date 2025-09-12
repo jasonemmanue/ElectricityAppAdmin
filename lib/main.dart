@@ -17,7 +17,9 @@ void main() async {
   );
 
   // Initialise le service de notification
-  await NotificationService().init();
+  final notificationService = NotificationService();
+  await notificationService.init();
+  await notificationService.requestPermissions(); // Demande de permissions ici
 
   // **** INITIALISE LE SERVICE D'ARRIÈRE-PLAN ****
   await initializeService();
