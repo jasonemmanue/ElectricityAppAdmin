@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../services/notification_service.dart';
 import '../widgets/message_bubble.dart';
@@ -151,6 +152,7 @@ class AppointmentsList extends StatelessWidget {
   }
 
   Future<void> _scheduleOrUpdateReminder(BuildContext context, DocumentSnapshot appointmentDoc) async {
+    // La vérification des permissions est maintenant dans main.dart
     var appt = appointmentDoc.data() as Map<String, dynamic>;
     DateTime? createdAt = (appt['createdAt'] as Timestamp?)?.toDate();
     if (createdAt == null) return;
@@ -340,7 +342,7 @@ class AppointmentsList extends StatelessWidget {
   }
 }
 
-// WIDGET POUR GÉRER TOUTE LA VUE DU CHAT
+// Le reste du fichier (AdminChatView) ne change pas.
 class AdminChatView extends StatefulWidget {
   final String userId;
   const AdminChatView({Key? key, required this.userId}) : super(key: key);

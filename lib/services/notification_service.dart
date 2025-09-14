@@ -22,10 +22,10 @@ class NotificationService {
       'admin_channel_id_01',
       'Alertes Administrateur',
       description:
-      'Canal pour les notifications urgentes (nouveaux messages/RDV).',
+      'Canal pour les notifications urgentes et les rappels.',
       importance: Importance.max,
       playSound: true,
-      enableVibration: true,
+      sound: RawResourceAndroidNotificationSound('notification_sound'),
     );
 
     await flutterLocalNotificationsPlugin
@@ -33,8 +33,11 @@ class NotificationService {
         AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
 
+    // --- MODIFICATION POUR L'ICÔNE PERSONNALISÉE ---
+    // On remplace '@mipmap/ic_launcher' par 'ic_notification' pour utiliser
+    // votre logo depuis le dossier android/app/src/main/res/drawable/
     const AndroidInitializationSettings initializationSettingsAndroid =
-    AndroidInitializationSettings('@mipmap/ic_launcher');
+    AndroidInitializationSettings('ic_notification');
 
     const DarwinInitializationSettings initializationSettingsIOS =
     DarwinInitializationSettings();
@@ -47,6 +50,7 @@ class NotificationService {
     debugPrint("✅ [ADMIN] NotificationService initialisé.");
   }
 
+  // Demande les permissions de base pour les notifications
   Future<void> requestPermissions() async {
     if (Platform.isAndroid) {
       await flutterLocalNotificationsPlugin
@@ -56,17 +60,25 @@ class NotificationService {
     }
   }
 
+  // Demande la permission spéciale pour les alarmes et rappels
+  Future<void> requestAlarmPermissions() async {
+    if (Platform.isAndroid) {
+      var status = await Permission.scheduleExactAlarm.status;
+      if (status.isDenied) {
+        await Permission.scheduleExactAlarm.request();
+      }
+    }
+  }
+
+
   Future<void> showFullScreenNotification(
       int id, String title, String body) async {
-    debugPrint(
-        "🚀 [ADMIN] Tentative d'affichage de la notification #$id: '$title'");
-
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'admin_channel_id_01',
       'Alertes Administrateur',
       importance: Importance.max,
       priority: Priority.high,
-      ticker: 'ticker',
+      sound: RawResourceAndroidNotificationSound('notification_sound'),
       fullScreenIntent: true,
     );
 
@@ -74,9 +86,8 @@ class NotificationService {
       id,
       title,
       body,
-      NotificationDetails(android: androidDetails),
+      const NotificationDetails(android: androidDetails),
     );
-    debugPrint("✅ [ADMIN] Notification #$id affichée avec succès.");
   }
 
   Future<void> scheduleNotification(
@@ -88,7 +99,7 @@ class NotificationService {
       'Alertes Administrateur',
       importance: Importance.max,
       priority: Priority.high,
-      ticker: 'ticker',
+      sound: RawResourceAndroidNotificationSound('notification_sound'),
       fullScreenIntent: true,
     );
 
