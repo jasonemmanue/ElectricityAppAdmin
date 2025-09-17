@@ -1,4 +1,4 @@
-// PROJET ADMIN - Fichier : lib/screens/client_details_screen.dart
+//lib/screens/client_details_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,6 +9,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../services/notification_service.dart';
 import '../widgets/message_bubble.dart';
 import 'map_screen.dart';
+import '../services/global_state.dart';
 
 // WIDGET PRINCIPAL QUI GÈRE LES ONGLETS
 class ClientDetailsScreen extends StatefulWidget {
@@ -26,16 +27,43 @@ class ClientDetailsScreen extends StatefulWidget {
 }
 
 class _ClientDetailsScreenState extends State<ClientDetailsScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
+  final GlobalState _globalState = GlobalState();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     initializeDateFormatting('fr_FR', null);
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_handleTabSelection);
-    _resetCountersForCurrentTab(0);
+
+    // Indique que cet écran de chat est maintenant actif
+    _globalState.setChatScreenActive(true, userId: widget.userId);
+
+    // Réinitialise les compteurs dès l'ouverture de l'écran
+    _resetCountersForCurrentTab(_tabController.index);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    // Indique que l'écran de chat n'est plus actif
+    _globalState.setChatScreenActive(false, userId: null);
+    _tabController.removeListener(_handleTabSelection);
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Si l'application revient au premier plan et que cet écran est visible
+    if (state == AppLifecycleState.resumed && mounted) {
+      debugPrint("[LIFECYCLE - ClientDetails] App resumed. Resetting counters.");
+      _resetCountersForCurrentTab(_tabController.index);
+    }
   }
 
   void _handleTabSelection() {
@@ -46,18 +74,15 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
   void _resetCountersForCurrentTab(int index) {
     final docRef =
     FirebaseFirestore.instance.collection('chats').doc(widget.userId);
-    if (index == 0) {
-      docRef.set({'unreadAppointmentCountAdmin': 0}, SetOptions(merge: true));
-    } else if (index == 1) {
-      docRef.set({'unreadChatCountAdmin': 0}, SetOptions(merge: true));
-    }
-  }
 
-  @override
-  void dispose() {
-    _tabController.removeListener(_handleTabSelection);
-    _tabController.dispose();
-    super.dispose();
+    // L'index 0 correspond à l'onglet "RDV", l'index 1 à l'onglet "Chat"
+    if (index == 1) {
+      // Si on est sur l'onglet de chat, on met le compteur de chat à zéro
+      docRef.set({'unreadChatCountAdmin': 0}, SetOptions(merge: true));
+    } else {
+      // Sinon, on met celui des rendez-vous à zéro
+      docRef.set({'unreadAppointmentCountAdmin': 0}, SetOptions(merge: true));
+    }
   }
 
   @override
@@ -152,7 +177,6 @@ class AppointmentsList extends StatelessWidget {
   }
 
   Future<void> _scheduleOrUpdateReminder(BuildContext context, DocumentSnapshot appointmentDoc) async {
-    // La vérification des permissions est maintenant dans main.dart
     var appt = appointmentDoc.data() as Map<String, dynamic>;
     DateTime? createdAt = (appt['createdAt'] as Timestamp?)?.toDate();
     if (createdAt == null) return;
@@ -342,7 +366,7 @@ class AppointmentsList extends StatelessWidget {
   }
 }
 
-// Le reste du fichier (AdminChatView) ne change pas.
+// WIDGET POUR LA VUE DU CHAT
 class AdminChatView extends StatefulWidget {
   final String userId;
   const AdminChatView({Key? key, required this.userId}) : super(key: key);

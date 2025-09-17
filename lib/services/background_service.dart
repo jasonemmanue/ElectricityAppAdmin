@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'notification_service.dart';
 import '../firebase_options.dart';
+import 'global_state.dart'; // Importez le service d'état
 
 @pragma('vm:entry-point')
 void onStart(ServiceInstance service) async {
@@ -20,6 +21,7 @@ void onStart(ServiceInstance service) async {
 
   final NotificationService notificationService = NotificationService();
   await notificationService.init();
+  final GlobalState globalState = GlobalState();
 
   if (service is AndroidServiceInstance) {
     service.on('setAsForeground').listen((event) {
@@ -76,6 +78,14 @@ void onStart(ServiceInstance service) async {
         final data = change.doc.data() as Map<String, dynamic>;
         final userEmail = data['userEmail'] ?? 'Un utilisateur';
         final userId = data['userId'];
+
+        // Vérifie si l'admin est déjà sur l'écran de chat de cet utilisateur
+        if (globalState.isAppInForeground &&
+            globalState.isChatScreenActive &&
+            globalState.activeChatUserId == userId) {
+          debugPrint("   [ADMIN] L'admin est déjà sur le chat de $userEmail. Pas de notification.");
+          continue; // Ne pas envoyer de notification
+        }
 
         // Utilise le timestamp du dernier message pour créer une clé unique
         // et éviter de notifier plusieurs fois pour le même message.

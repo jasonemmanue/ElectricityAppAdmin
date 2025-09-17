@@ -1,3 +1,4 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,6 +8,7 @@ import 'screens/admin_login_screen.dart';
 import 'screens/animated_loading_screen.dart';
 import 'services/notification_service.dart';
 import 'services/background_service.dart';
+import 'services/global_state.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,16 +17,13 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Initialise le service de notification et demande les permissions
   final notificationService = NotificationService();
   await notificationService.init();
-  await notificationService.requestPermissions(); // Pour les notifications normales
-  await notificationService.requestAlarmPermissions(); // **** POUR LES ALARMES ****
+  await notificationService.requestPermissions();
+  await notificationService.requestAlarmPermissions();
 
-  // Initialise le service d'arrière-plan
   await initializeService();
 
-  // On stocke l'information que c'est bien l'app admin
   final prefs = await SharedPreferences.getInstance();
   await prefs.setBool('isAdmin', true);
   await prefs.setString('userId', 'admin_user_id');
@@ -32,8 +31,38 @@ void main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({Key? key}) : super(key: key);
+
+  @override
+  _MyAppState createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  final GlobalState _globalState = GlobalState();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Au démarrage, l'application est considérée comme étant au premier plan.
+    _globalState.setAppInForeground(true);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Met à jour l'état global en fonction du cycle de vie de l'application.
+    final bool isAppInForeground = state == AppLifecycleState.resumed;
+    _globalState.setAppInForeground(isAppInForeground);
+    debugPrint("[APP LIFECYCLE] - App is in foreground: $isAppInForeground");
+  }
 
   @override
   Widget build(BuildContext context) {
