@@ -12,7 +12,7 @@ class AdminLoginScreen extends StatefulWidget {
 class _AdminLoginScreenState extends State<AdminLoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final String _adminEmail = "Kammeugnejulio41@gmail.com";
+  final String _adminEmail = "kammeugnejulio41@gmail.com";
   final String _adminPassword = "123456789";
 
   void _login() {
