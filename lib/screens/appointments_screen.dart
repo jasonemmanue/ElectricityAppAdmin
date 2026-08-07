@@ -59,35 +59,18 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               itemCount: _statuses.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (context, i) {
                 final s = _statuses[i];
                 final selected = _filter == s;
-                return FilterChip(
-                  label: Text(s),
+                // Custom pill — fully theme-independent so the label is always
+                // legible: selected = yellow with dark text; unselected =
+                // translucent-blue with white text + white border (same
+                // readability as the client-details TabBar labels).
+                return _FilterPill(
+                  label: s,
                   selected: selected,
-                  onSelected: (_) => setState(() => _filter = s),
-                  // Force our own colors — Material 3's surfaceTintColor default
-                  // otherwise turns unselected chips into invisible white-on-blue.
-                  backgroundColor: Colors.white.withOpacity(0.18),
-                  selectedColor: AppTheme.accent,
-                  surfaceTintColor: Colors.transparent,
-                  checkmarkColor: AppTheme.textPrimary,
-                  showCheckmark: selected,
-                  labelStyle: TextStyle(
-                    color: selected ? AppTheme.textPrimary : Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                  side: BorderSide(
-                    color: selected
-                        ? AppTheme.accent
-                        : Colors.white.withOpacity(0.55),
-                    width: 1,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
+                  onTap: () => setState(() => _filter = s),
                 );
               },
             ),
@@ -123,6 +106,57 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _FilterPill extends StatelessWidget {
+  const _FilterPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Container(
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: selected ? AppTheme.accent : Colors.white.withOpacity(0.16),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected ? AppTheme.accent : Colors.white.withOpacity(0.6),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (selected) ...[
+                const Icon(Icons.check, size: 15, color: AppTheme.textPrimary),
+                const SizedBox(width: 4),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected ? AppTheme.textPrimary : Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12.5,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

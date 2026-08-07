@@ -203,17 +203,22 @@ class _StatsGrid extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: GridView.count(
-        crossAxisCount: 2,
-        // Was 1.55 → contents (icon + value 26sp + label) needed ~120dp but
-        // grid gave ~100dp = 17px overflow. 1.35 gives the room without
-        // making the tiles look empty.
-        childAspectRatio: 1.35,
+      child: GridView.builder(
+        // Fixed tile height (mainAxisExtent) instead of childAspectRatio —
+        // childAspectRatio varies with screen width and could still overflow.
+        // 118dp comfortably fits the icon + value + label; the card content
+        // is also wrapped in a FittedBox so it can never overflow whatever
+        // the device or textScale.
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisExtent: 118,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+        ),
         physics: const NeverScrollableScrollPhysics(),
         shrinkWrap: true,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        children: cards,
+        itemCount: cards.length,
+        itemBuilder: (_, i) => cards[i],
       ),
     );
   }
@@ -249,32 +254,34 @@ class _StatCard extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
+          // FittedBox scales the whole column down if it would ever exceed the
+          // tile — so no more "BOTTOM OVERFLOWED" whatever the device / font.
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: color, size: 22),
                 ),
-                child: Icon(icon, color: color, size: 22),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(value,
-                      style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary)),
-                  Text(label,
-                      style: const TextStyle(
-                          fontSize: 12, color: AppTheme.textSecondary)),
-                ],
-              ),
-            ],
+                const SizedBox(height: 10),
+                Text(value,
+                    style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary)),
+                Text(label,
+                    style: const TextStyle(
+                        fontSize: 12, color: AppTheme.textSecondary)),
+              ],
+            ),
           ),
         ),
       ),
