@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../config/admin_credentials.dart';
 import '../services/fcm_service.dart';
 import '../theme/app_theme.dart';
 import 'home_shell.dart';
@@ -13,10 +14,9 @@ class AdminLoginScreen extends StatefulWidget {
 }
 
 class _AdminLoginScreenState extends State<AdminLoginScreen> {
-  static const String _adminEmail = 'kammeugnejulio41@gmail.com';
-
-  final _emailController = TextEditingController(text: _adminEmail);
-  final _passwordController = TextEditingController();
+  final _emailController = TextEditingController(text: AdminCredentials.email);
+  final _passwordController =
+      TextEditingController(text: AdminCredentials.password);
   final _formKey = GlobalKey<FormState>();
 
   bool _loading = false;
@@ -33,7 +33,13 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         final token = await user.getIdTokenResult(true);
         if (token.claims?['admin'] == true && mounted) {
           _goToShell();
+          return;
         }
+      });
+    } else {
+      // No session yet — auto-attempt login with the static credentials.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _login();
       });
     }
   }
