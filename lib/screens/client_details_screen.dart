@@ -88,11 +88,19 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.userEmail, style: const TextStyle(fontSize: 16)),
-        // AppBar color comes from AppTheme
+        title: Text(
+          widget.userEmail,
+          style: const TextStyle(fontSize: 16, color: Colors.white),
+        ),
+        iconTheme: const IconThemeData(color: Colors.white),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
+          // Explicit label colors — the default in Material 3 goes gray
+          // and becomes unreadable on the primary-blue AppBar.
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorWeight: 3,
           tabs: [
             Tab(
               child: StreamBuilder<DocumentSnapshot>(

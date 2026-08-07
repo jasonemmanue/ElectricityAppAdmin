@@ -11,5 +11,5 @@
 // CLAUDE.md).
 class AdminCredentials {
   static const String email = 'kammeugnejulio41@gmail.com';
-  static const String password = 'REPLACE_ME';
+  static const String password = '123456789';
 }

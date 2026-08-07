@@ -205,7 +205,10 @@ class _StatsGrid extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: GridView.count(
         crossAxisCount: 2,
-        childAspectRatio: 1.55,
+        // Was 1.55 → contents (icon + value 26sp + label) needed ~120dp but
+        // grid gave ~100dp = 17px overflow. 1.35 gives the room without
+        // making the tiles look empty.
+        childAspectRatio: 1.35,
         physics: const NeverScrollableScrollPhysics(),
         shrinkWrap: true,
         crossAxisSpacing: 8,
@@ -441,11 +444,11 @@ class _Footer extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
+              // Indices must match HomeShell._sections order (4 tabs, no Messages).
               _footerBtn(context, Icons.dashboard_rounded, 'Tableau', 0),
-              _footerBtn(context, Icons.chat_bubble_rounded, 'Messages', 1),
-              _footerBtn(context, Icons.event_note_rounded, 'RDV', 2),
-              _footerBtn(context, Icons.people_alt_rounded, 'Clients', 3),
-              _footerBtn(context, Icons.settings_rounded, 'Réglages', 4),
+              _footerBtn(context, Icons.event_note_rounded, 'RDV', 1),
+              _footerBtn(context, Icons.people_alt_rounded, 'Clients', 2),
+              _footerBtn(context, Icons.settings_rounded, 'Réglages', 3),
             ],
           ),
           const SizedBox(height: 12),

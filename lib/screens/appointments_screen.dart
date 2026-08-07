@@ -67,16 +67,26 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                   label: Text(s),
                   selected: selected,
                   onSelected: (_) => setState(() => _filter = s),
-                  backgroundColor: Colors.white.withOpacity(0.15),
+                  // Force our own colors — Material 3's surfaceTintColor default
+                  // otherwise turns unselected chips into invisible white-on-blue.
+                  backgroundColor: Colors.white.withOpacity(0.18),
                   selectedColor: AppTheme.accent,
+                  surfaceTintColor: Colors.transparent,
+                  checkmarkColor: AppTheme.textPrimary,
+                  showCheckmark: selected,
                   labelStyle: TextStyle(
                     color: selected ? AppTheme.textPrimary : Colors.white,
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
                   ),
+                  side: BorderSide(
+                    color: selected
+                        ? AppTheme.accent
+                        : Colors.white.withOpacity(0.55),
+                    width: 1,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(color: Colors.white.withOpacity(selected ? 0 : 0.3)),
                   ),
                 );
               },

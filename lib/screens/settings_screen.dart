@@ -1,13 +1,45 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/fcm_service.dart';
 import '../theme/app_theme.dart';
 import 'admin_login_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
+const String _kUrgentAlertsPrefKey = 'adminUrgentAlertsEnabled';
+
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _urgentAlerts = true;
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUrgentAlerts();
+  }
+
+  Future<void> _loadUrgentAlerts() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _urgentAlerts = prefs.getBool(_kUrgentAlertsPrefKey) ?? true;
+      _loaded = true;
+    });
+  }
+
+  Future<void> _setUrgentAlerts(bool value) async {
+    setState(() => _urgentAlerts = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kUrgentAlertsPrefKey, value);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,8 +106,8 @@ class SettingsScreen extends StatelessWidget {
             child: Column(
               children: [
                 SwitchListTile(
-                  value: true,
-                  onChanged: (_) {},
+                  value: _urgentAlerts,
+                  onChanged: _loaded ? _setUrgentAlerts : null,
                   title: const Text('Alertes urgentes (plein écran)'),
                   subtitle: const Text('Sonne même en mode ne pas déranger'),
                   secondary: const Icon(Icons.notifications_active),

@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 import 'appointments_screen.dart';
-import 'conversations_screen.dart';
 import 'dashboard_screen.dart';
 import 'settings_screen.dart';
 import 'users_screen.dart';
 
-/// The persistent 5-tab shell wrapping the admin app.
+/// The persistent 4-tab shell wrapping the admin app.
+/// The Messages tab was removed — chat is still accessible per-client from
+/// Clients → open a client → Chat tab.
 /// Bottom nav is always visible; each tab has its own Navigator stack for
 /// smooth push/pop within a section.
 class HomeShell extends StatefulWidget {
@@ -22,7 +23,6 @@ class _HomeShellState extends State<HomeShell> {
 
   final _sections = const <_Section>[
     _Section(icon: Icons.dashboard_rounded, label: 'Tableau', child: DashboardScreen()),
-    _Section(icon: Icons.chat_bubble_rounded, label: 'Messages', child: ConversationsScreen()),
     _Section(icon: Icons.event_note_rounded, label: 'RDV', child: AppointmentsScreen()),
     _Section(icon: Icons.people_alt_rounded, label: 'Clients', child: UsersScreen()),
     _Section(icon: Icons.settings_rounded, label: 'Réglages', child: SettingsScreen()),
