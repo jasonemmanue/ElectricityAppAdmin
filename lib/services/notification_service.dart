@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Color;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -72,21 +73,28 @@ class NotificationService {
 
 
   Future<void> showFullScreenNotification(
-      int id, String title, String body) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      int id, String title, String body,
+      {bool fullScreen = true}) async {
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'admin_channel_id_01',
       'Alertes Administrateur',
+      channelDescription: 'Canal pour les alertes urgentes admin.',
       importance: Importance.max,
       priority: Priority.high,
-      sound: RawResourceAndroidNotificationSound('notification_sound'),
-      fullScreenIntent: true,
+      sound: const RawResourceAndroidNotificationSound('notification_sound'),
+      fullScreenIntent: fullScreen,
+      icon: 'ic_notification',
+      color: const Color(0xFF1A237E),
+      colorized: true,
+      category: AndroidNotificationCategory.alarm,
+      visibility: NotificationVisibility.public,
     );
 
     await flutterLocalNotificationsPlugin.show(
       id,
       title,
       body,
-      const NotificationDetails(android: androidDetails),
+      NotificationDetails(android: androidDetails),
     );
   }
 

@@ -1,18 +1,19 @@
-// lib/screens/animated_loading_screen.dart
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
+
+import '../theme/app_theme.dart';
 
 class AnimatedLoadingScreen extends StatefulWidget {
   final Widget nextScreen;
 
-  const AnimatedLoadingScreen({Key? key, required this.nextScreen}) : super(key: key);
+  const AnimatedLoadingScreen({super.key, required this.nextScreen});
 
   @override
-  _AnimatedLoadingScreenState createState() => _AnimatedLoadingScreenState();
+  State<AnimatedLoadingScreen> createState() => _AnimatedLoadingScreenState();
 }
 
-class _AnimatedLoadingScreenState extends State<AnimatedLoadingScreen> with TickerProviderStateMixin {
+class _AnimatedLoadingScreenState extends State<AnimatedLoadingScreen>
+    with TickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
@@ -20,14 +21,13 @@ class _AnimatedLoadingScreenState extends State<AnimatedLoadingScreen> with Tick
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1400),
     )..repeat();
 
-    // Navigue vers l'écran suivant après 3 secondes
-    Timer(const Duration(seconds: 3), () {
+    Timer(const Duration(milliseconds: 2200), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => widget.nextScreen),
+          MaterialPageRoute(builder: (_) => widget.nextScreen),
         );
       }
     });
@@ -40,26 +40,17 @@ class _AnimatedLoadingScreenState extends State<AnimatedLoadingScreen> with Tick
   }
 
   Widget _buildDot(int index) {
-    // Calcul corrigé pour l'animation
-    final begin = index * 0.1;
-    final end = begin + 0.4;
-
+    final begin = index * 0.15;
+    final end = (begin + 0.5).clamp(0.0, 1.0);
     return FadeTransition(
       opacity: Tween(begin: 0.2, end: 1.0).animate(
-        CurvedAnimation(
-          parent: _controller,
-          // L'Interval doit avoir une valeur 'end' qui ne dépasse pas 1.0
-          curve: Interval(begin, end < 1.0 ? end : 1.0, curve: Curves.easeInOut),
-        ),
+        CurvedAnimation(parent: _controller, curve: Interval(begin, end, curve: Curves.easeInOut)),
       ),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 5),
-        width: 12,
-        height: 12,
-        decoration: const BoxDecoration(
-          color: Colors.blue, // Couleur des points
-          shape: BoxShape.circle,
-        ),
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        width: 10,
+        height: 10,
+        decoration: const BoxDecoration(color: AppTheme.accent, shape: BoxShape.circle),
       ),
     );
   }
@@ -67,27 +58,64 @@ class _AnimatedLoadingScreenState extends State<AnimatedLoadingScreen> with Tick
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Image.asset(
-              'assets/icon/Logososelectricityapp.jpg',
-              width: 120,
-              height: 120,
-            ),
-            const SizedBox(height: 50),
-            AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                return Row(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppTheme.primary, AppTheme.primaryDark],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 140,
+                height: 140,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 24,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: Image.asset('assets/icon/logohoremplus.png'),
+              ),
+              const SizedBox(height: 32),
+              const Text(
+                'SOS Electricity',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Admin Console',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.75),
+                  fontSize: 13,
+                  letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(height: 40),
+              AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) => Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(4, (index) => _buildDot(index)),
-                );
-              },
-            ),
-          ],
+                  children: List.generate(4, _buildDot),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
