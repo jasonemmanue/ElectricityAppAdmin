@@ -58,20 +58,24 @@ Créer un fichier `set-admin-claim.js` dans le même dossier que la clé :
 
 ```javascript
 // set-admin-claim.js — one-time script to grant admin custom claim
-const admin = require('firebase-admin');
+// Utilise l'API modulaire firebase-admin (v12+). L'ancien style
+// `admin.credential.cert(...)` a été retiré dans les versions récentes.
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
+
 const serviceAccount = require('./serviceAccountKey.json');
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
+initializeApp({
+  credential: cert(serviceAccount),
 });
 
 // Remplacez cette valeur par l'UID récupéré à l'étape 2
 const ADMIN_UID = 'COLLEZ_L_UID_ICI';
 
-admin.auth().setCustomUserClaims(ADMIN_UID, { admin: true })
+getAuth().setCustomUserClaims(ADMIN_UID, { admin: true })
   .then(() => {
     console.log(`OK — custom claim admin=true set on ${ADMIN_UID}`);
-    return admin.auth().getUser(ADMIN_UID);
+    return getAuth().getUser(ADMIN_UID);
   })
   .then((userRecord) => {
     console.log('User claims:', userRecord.customClaims);
@@ -132,6 +136,7 @@ Le code actuel ne le requiert pas (le contrôle est basé sur le custom claim), 
 | App admin affiche « Ce compte n'a pas de privilèges admin » | Le custom claim n'est pas setté OU le token n'a pas été rafraîchi | Refaire l'étape 3, puis se déconnecter/reconnecter dans l'app |
 | Le script `node set-admin-claim.js` erreur `PERMISSION_DENIED` | Le service account n'a pas les droits sur Firebase Auth | Régénérer la clé, ou vérifier le rôle IAM `Firebase Authentication Admin` |
 | Le script erreur `Cannot find module 'firebase-admin'` | `npm install firebase-admin` n'a pas été exécuté | Le lancer dans le même dossier que le script |
+| Le script erreur `TypeError: Cannot read properties of undefined (reading 'cert')` | Ancien style `admin.credential.cert()` retiré dans firebase-admin v13+ | Utiliser la version modulaire du script ci-dessus (`require('firebase-admin/app')`) |
 
 ---
 
