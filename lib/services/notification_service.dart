@@ -5,6 +5,13 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/timezone.dart' as tz;
 
+import 'alert_policy.dart';
+
+/// Channel used when an alert must NOT ring (quiet hours, or urgent alerts
+/// switched off). A separate channel is required because Android freezes a
+/// channel's importance and sound at creation time.
+const String quietChannelId = 'admin_channel_quiet_01';
+
 class NotificationService {
   static final NotificationService _notificationService =
   NotificationService._internal();
@@ -29,10 +36,21 @@ class NotificationService {
       sound: RawResourceAndroidNotificationSound('notification_sound'),
     );
 
-    await flutterLocalNotificationsPlugin
+    // Companion channel for quiet hours — no sound, default importance, so it
+    // never rings. Android locks these traits at creation, hence two channels.
+    const AndroidNotificationChannel quietChannel = AndroidNotificationChannel(
+      quietChannelId,
+      'Alertes discrètes',
+      description: 'Alertes reçues pendant les heures calmes (sans sonnerie).',
+      importance: Importance.defaultImportance,
+      playSound: false,
+    );
+
+    final androidPlugin = flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+            AndroidFlutterLocalNotificationsPlugin>();
+    await androidPlugin?.createNotificationChannel(channel);
+    await androidPlugin?.createNotificationChannel(quietChannel);
 
     // --- MODIFICATION POUR L'ICÔNE PERSONNALISÉE ---
     // On remplace '@mipmap/ic_launcher' par 'ic_notification' pour utiliser
@@ -72,23 +90,45 @@ class NotificationService {
   }
 
 
+  /// Shows an admin alert. Whether it *rings* (full-screen intent + alarm
+  /// category, which bypasses Do Not Disturb) is decided by [AlertPolicy]:
+  /// the "Alertes urgentes" switch and the quiet-hours window. Outside those,
+  /// the alert still arrives — it just doesn't wake anyone up at 3 a.m.
   Future<void> showFullScreenNotification(
       int id, String title, String body,
       {bool fullScreen = true}) async {
+    final allowUrgent = await AlertPolicy.shouldRingUrgently();
+    final ring = fullScreen && allowUrgent;
+
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'admin_channel_id_01',
-      'Alertes Administrateur',
-      channelDescription: 'Canal pour les alertes urgentes admin.',
-      importance: Importance.max,
-      priority: Priority.high,
-      sound: const RawResourceAndroidNotificationSound('notification_sound'),
-      fullScreenIntent: fullScreen,
+      // Quiet alerts go to their own channel: on Android a channel's
+      // importance/sound is immutable after creation, so reusing the loud
+      // channel with playSound:false would be ignored by the system.
+      ring ? 'admin_channel_id_01' : quietChannelId,
+      ring ? 'Alertes Administrateur' : 'Alertes discrètes',
+      channelDescription: ring
+          ? 'Canal pour les alertes urgentes admin.'
+          : 'Alertes reçues pendant les heures calmes.',
+      importance: ring ? Importance.max : Importance.defaultImportance,
+      priority: ring ? Priority.high : Priority.defaultPriority,
+      playSound: ring,
+      sound: ring
+          ? const RawResourceAndroidNotificationSound('notification_sound')
+          : null,
+      fullScreenIntent: ring,
       icon: 'ic_notification',
       color: const Color(0xFF1A237E),
       colorized: true,
-      category: AndroidNotificationCategory.alarm,
+      category: ring
+          ? AndroidNotificationCategory.alarm
+          : AndroidNotificationCategory.message,
       visibility: NotificationVisibility.public,
     );
+
+    if (!ring) {
+      debugPrint('🔕 [ADMIN] Alerte discrète (heures calmes ou alertes '
+          'urgentes désactivées) : $title');
+    }
 
     await flutterLocalNotificationsPlugin.show(
       id,

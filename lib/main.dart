@@ -7,6 +7,7 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'firebase_options.dart';
 import 'screens/admin_login_screen.dart';
 import 'screens/animated_loading_screen.dart';
+import 'services/alert_policy.dart';
 import 'services/fcm_service.dart';
 import 'services/global_state.dart';
 import 'services/notification_service.dart';
@@ -30,6 +31,10 @@ Future<void> main() async {
 
   final prefs = await SharedPreferences.getInstance();
   await prefs.setBool('isAdmin', true);
+
+  // Load the alert policy (urgent-alerts switch + quiet hours) before the UI
+  // so Settings shows the real values on first frame.
+  await AlertPolicy.instance.hydrate();
 
   runApp(const AdminApp());
 }

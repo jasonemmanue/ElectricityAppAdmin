@@ -1,13 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
+import '../services/alert_policy.dart';
 import '../services/fcm_service.dart';
 import '../theme/app_theme.dart';
 import 'admin_login_screen.dart';
-
-const String _kUrgentAlertsPrefKey = 'adminUrgentAlertsEnabled';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -17,32 +14,40 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _urgentAlerts = true;
-  bool _loaded = false;
+  final _policy = AlertPolicy.instance;
 
   @override
   void initState() {
     super.initState();
-    _loadUrgentAlerts();
+    if (!_policy.isLoaded) _policy.hydrate();
   }
 
-  Future<void> _loadUrgentAlerts() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-    setState(() {
-      _urgentAlerts = prefs.getBool(_kUrgentAlertsPrefKey) ?? true;
-      _loaded = true;
-    });
+  Future<void> _pickTime(bool isStart) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: isStart ? _policy.quietStart : _policy.quietEnd,
+      helpText: isStart ? 'Début des heures calmes' : 'Fin des heures calmes',
+    );
+    if (picked == null) return;
+    if (isStart) {
+      await _policy.setQuietStart(picked);
+    } else {
+      await _policy.setQuietEnd(picked);
+    }
   }
 
-  Future<void> _setUrgentAlerts(bool value) async {
-    setState(() => _urgentAlerts = value);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kUrgentAlertsPrefKey, value);
-  }
+  String _fmt(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _policy,
+      builder: (context, _) => _buildScaffold(context),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     return Scaffold(
       appBar: AppBar(title: const Text('Réglages')),
@@ -106,12 +111,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               children: [
                 SwitchListTile(
-                  value: _urgentAlerts,
-                  onChanged: _loaded ? _setUrgentAlerts : null,
+                  value: _policy.urgentEnabled,
+                  onChanged: _policy.isLoaded ? _policy.setUrgentEnabled : null,
                   title: const Text('Alertes urgentes (plein écran)'),
                   subtitle: const Text('Sonne même en mode ne pas déranger'),
                   secondary: const Icon(Icons.notifications_active),
                 ),
+                const Divider(height: 1),
+                SwitchListTile(
+                  value: _policy.quietEnabled,
+                  onChanged: _policy.isLoaded && _policy.urgentEnabled
+                      ? _policy.setQuietEnabled
+                      : null,
+                  title: const Text('Heures calmes'),
+                  subtitle: Text(
+                    _policy.quietEnabled
+                        ? 'Aucune sonnerie de ${_fmt(_policy.quietStart)} à ${_fmt(_policy.quietEnd)} — les alertes arrivent en silence'
+                        : 'Les alertes urgentes sonnent à toute heure',
+                  ),
+                  secondary: const Icon(Icons.bedtime_outlined),
+                ),
+                if (_policy.quietEnabled && _policy.urgentEnabled) ...[
+                  const Divider(height: 1),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ListTile(
+                          leading: const Icon(Icons.nightlight_outlined),
+                          title: const Text('Début'),
+                          subtitle: Text(_fmt(_policy.quietStart)),
+                          onTap: () => _pickTime(true),
+                        ),
+                      ),
+                      Expanded(
+                        child: ListTile(
+                          leading: const Icon(Icons.wb_sunny_outlined),
+                          title: const Text('Fin'),
+                          subtitle: Text(_fmt(_policy.quietEnd)),
+                          onTap: () => _pickTime(false),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.refresh),
