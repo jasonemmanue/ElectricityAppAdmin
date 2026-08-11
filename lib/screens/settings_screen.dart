@@ -1,5 +1,4 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import '../services/alert_policy.dart';
 import '../services/fcm_service.dart';
@@ -154,21 +153,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ],
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.refresh),
-                  title: const Text('Réenregistrer le token FCM'),
-                  subtitle: const Text('En cas de non-réception des notifications'),
-                  onTap: () async {
-                    await FirebaseMessaging.instance.deleteToken();
-                    await FcmService.instance.registerAfterSignIn();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Token FCM régénéré')),
-                      );
-                    }
-                  },
-                ),
               ],
             ),
           ),

@@ -3,10 +3,13 @@
 // high-importance admin channel (custom sound + full-screen intent).
 
 import 'dart:io' show Platform;
+import 'dart:math' show Random;
+
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'alert_policy.dart';
 import 'notification_router.dart';
@@ -104,6 +107,10 @@ class FcmService {
       await callable.call<void>({
         'token': token,
         'platform': Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : 'other'),
+        // Lets the backend recognise "same phone, new token" and drop the old
+        // doc. Without it every reinstall left another live token behind and
+        // the device was pushed to several times for one event.
+        'deviceId': await _deviceId(),
         // Ships the ring policy with the token so a new or refreshed token is
         // never briefly registered without one — the server rings by default
         // when a device has no policy, which would defeat quiet hours.
@@ -114,6 +121,28 @@ class FcmService {
     } catch (e) {
       debugPrint('⚠️ [ADMIN] FCM token registration failed: $e');
     }
+  }
+
+  static const _kDeviceId = 'adminDeviceId';
+
+  /// Stable id for this installation, generated once and kept in
+  /// SharedPreferences. The FCM token is not usable for this: it changes on
+  /// reinstall and on token refresh, which is exactly the case we need to
+  /// recognise. Cleared with the app's data, which is fine — a fresh install is
+  /// a new device as far as the backend is concerned, and the token it
+  /// supersedes gets pruned by FCM as unregistered.
+  Future<String> _deviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final existing = prefs.getString(_kDeviceId);
+    if (existing != null && existing.isNotEmpty) return existing;
+
+    final rng = Random.secure();
+    final id = List.generate(
+      16,
+      (_) => rng.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+    await prefs.setString(_kDeviceId, id);
+    return id;
   }
 
   Future<void> unregisterOnSignOut() async {
