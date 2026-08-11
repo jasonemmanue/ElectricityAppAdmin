@@ -87,21 +87,63 @@ fuseaux (UTC+1 silencieux pendant qu'UTC-5 sonne au même instant) et le parsing
 Si les logs annoncent `1 device(s) with no synced policy → ring`, c'est que
 l'appareil n'a jamais synchronisé — ouvre l'app admin une fois en étant connecté.
 
-## Hors périmètre : les rappels de RDV
+## Les rappels programmés : ils sonnent toujours
 
-Les **rappels de RDV** (Clients → un client → un rendez-vous) n'ont rien à voir
-avec ce qui précède, et c'est voulu.
+Un **rappel de RDV** (Clients → un client → un rendez-vous) est une notification
+**locale, côté administrateur** : l'admin la programme lui-même, sur son propre
+téléphone, à une heure qu'il choisit. Aucun push, aucune Cloud Function, aucun
+autre appareil.
 
-Ils passent par `NotificationService.scheduleNotification` : une notification
-**purement locale, côté administrateur**, programmée par l'admin lui-même à une
-heure qu'il choisit. Aucun push, aucune Cloud Function, aucun autre appareil —
-donc rien à décider côté serveur.
+Ne pas confondre avec les notifications de RDV envoyées **au client** (accepté,
+en route, terminé…) : celles-là partent de `onAppointmentStatusChanged`, c'est un
+tout autre chemin.
 
-Conséquence assumée : un rappel fixé à 3 h du matin sonnera, heures calmes
-actives ou non. Les heures calmes protègent des alertes **entrantes**, subies et
-imprévisibles (nouveau RDV, message, devis) ; un rappel, l'admin l'a réglé
-exprès pour cette heure-là.
+**Un rappel sonne quelle que soit l'heure**, heures calmes actives ou non. C'est
+délibéré : les heures calmes existent pour amortir les alertes **entrantes**,
+subies, dont personne n'a choisi l'horaire. Un rappel, c'est l'inverse — une
+alarme réglée exprès pour cet instant précis.
 
-En pratique, ne teste donc pas les heures calmes via un rappel de RDV : tu
-conclurais à tort que la fonctionnalité ne marche pas. Utilise le parcours de la
+Mais on prévient. Au moment où le rappel est programmé, si l'heure choisie tombe
+dans la fenêtre calme (ou si les alertes urgentes sont coupées), la confirmation
+le dit explicitement :
+
+> Rappel programmé pour 12/08/2026 03:00. Il sonnera malgré vos heures calmes
+> (22:00 → 07:00).
+
+L'admin garde la main, il sait simplement à quoi s'attendre. Le message est en
+orange et reste affiché plus longtemps que la confirmation normale.
+
+### Le rappel est joué sur le flux *alarme*
+
+Un rappel utilise son propre canal, `admin_channel_alarm_01`, déclaré avec
+`AudioAttributesUsage.alarm`.
+
+Ce n'est pas cosmétique. Le canal des alertes, `admin_channel_id_01`, est en
+`USAGE_NOTIFICATION` : son son passe par le flux « notification ». Un rappel
+programmé y était posté **en silence** — vérifié sur l'appareil : l'alarme
+système se déclenchait à la seconde près, la notification était bien postée
+(`numPostedByApp=1`), mais elle n'alertait jamais (`numInterrupt=0`), alors que
+le mode Ne pas déranger, le mode silencieux, l'importance du canal et les
+permissions étaient tous hors de cause.
+
+`USAGE_ALARM` la place sur le flux alarme, celui qui ne dépend pas du volume des
+notifications. Il faut un canal distinct : Android fige les attributs audio d'un
+canal à sa création, donc les modifier après coup est ignoré sans erreur — même
+contrainte que pour le canal des heures calmes.
+
+Pour vérifier sur un appareil branché :
+
+```bash
+adb shell dumpsys notification --noredact | grep admin_channel_alarm_01
+```
+
+Tu dois y lire `mImportance=5` et `usage=USAGE_ALARM`. Après le déclenchement
+d'un rappel, `numInterrupt` doit avoir augmenté :
+
+```bash
+adb shell dumpsys notification --noredact | grep -A20 "key='com.example.electricity_app_admin'" | grep numInterrupt
+```
+
+Corollaire pour les tests : **ne teste pas les heures calmes via un rappel de
+RDV**, ce chemin ne consulte pas la politique serveur. Utilise le parcours de la
 section précédente.

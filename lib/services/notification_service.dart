@@ -12,6 +12,20 @@ import 'alert_policy.dart';
 /// channel's importance and sound at creation time.
 const String quietChannelId = 'admin_channel_quiet_01';
 
+/// Channel for scheduled appointment reminders.
+///
+/// These are alarms: the admin picked the instant, and expects the phone to
+/// make noise then. `admin_channel_id_01` carries `USAGE_NOTIFICATION`, so its
+/// sound rides the notification stream — which is why a reminder was posting
+/// silently (verified on device: notification posted, `numInterrupt=0`, with
+/// DND, silent mode, channel importance and permissions all ruled out).
+/// `USAGE_ALARM` puts it on the alarm stream instead.
+///
+/// It has to be its own channel rather than a tweak to the loud one: Android
+/// freezes a channel's audio attributes at creation, so changing them on an
+/// existing channel is silently ignored.
+const String alarmChannelId = 'admin_channel_alarm_01';
+
 class NotificationService {
   static final NotificationService _notificationService =
   NotificationService._internal();
@@ -46,11 +60,23 @@ class NotificationService {
       playSound: false,
     );
 
+    // Reminders ride the alarm stream — see [alarmChannelId].
+    const AndroidNotificationChannel alarmChannel = AndroidNotificationChannel(
+      alarmChannelId,
+      'Rappels de rendez-vous',
+      description: 'Rappels programmés par l\'administrateur.',
+      importance: Importance.max,
+      playSound: true,
+      sound: RawResourceAndroidNotificationSound('notification_sound'),
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+    );
+
     final androidPlugin = flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
     await androidPlugin?.createNotificationChannel(channel);
     await androidPlugin?.createNotificationChannel(quietChannel);
+    await androidPlugin?.createNotificationChannel(alarmChannel);
 
     // --- MODIFICATION POUR L'ICÔNE PERSONNALISÉE ---
     // On remplace '@mipmap/ic_launcher' par 'ic_notification' pour utiliser
@@ -152,12 +178,21 @@ class NotificationService {
     debugPrint("🚀 [ADMIN] Planification du rappel #$id pour $scheduledTime");
 
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'admin_channel_id_01',
-      'Alertes Administrateur',
+      alarmChannelId,
+      'Rappels de rendez-vous',
       importance: Importance.max,
       priority: Priority.high,
+      playSound: true,
       sound: RawResourceAndroidNotificationSound('notification_sound'),
+      // category + alarm usage are what make the system treat this as an
+      // alarm rather than a notification: alarm stream, exempt from the
+      // notification-volume and OEM throttling that was swallowing it.
+      audioAttributesUsage: AudioAttributesUsage.alarm,
+      category: AndroidNotificationCategory.alarm,
       fullScreenIntent: true,
+      visibility: NotificationVisibility.public,
+      icon: 'ic_notification',
+      color: Color(0xFF1A237E),
     );
 
     await flutterLocalNotificationsPlugin.zonedSchedule(
