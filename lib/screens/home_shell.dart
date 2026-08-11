@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/notification_router.dart';
 import 'appointments_screen.dart';
 import 'dashboard_screen.dart';
 import 'settings_screen.dart';
@@ -21,6 +22,31 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   late int _index = widget.initialIndex;
 
+  @override
+  void initState() {
+    super.initState();
+    // A tapped notification asks for a tab through this notifier — it has no
+    // BuildContext of its own, and the tap often lands before this shell even
+    // exists (app opened from a notification while it was killed).
+    NotificationRouter.requestedTab.addListener(_onTabRequested);
+    // Signals that navigation is possible now, replaying any tap that arrived
+    // during startup or while the login screen was up.
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => NotificationRouter.onShellReady());
+  }
+
+  @override
+  void dispose() {
+    NotificationRouter.requestedTab.removeListener(_onTabRequested);
+    super.dispose();
+  }
+
+  void _onTabRequested() {
+    final requested = NotificationRouter.requestedTab.value;
+    if (!mounted || requested == _index) return;
+    setState(() => _index = requested);
+  }
+
   final _sections = const <_Section>[
     _Section(icon: Icons.dashboard_rounded, label: 'Tableau', child: DashboardScreen()),
     _Section(icon: Icons.event_note_rounded, label: 'RDV', child: AppointmentsScreen()),
@@ -37,7 +63,12 @@ class _HomeShellState extends State<HomeShell> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
+        onDestinationSelected: (i) {
+          // Kept in sync so a later notification asking for the tab the admin
+          // already picked still registers as a change.
+          NotificationRouter.requestedTab.value = i;
+          setState(() => _index = i);
+        },
         destinations: [
           for (final s in _sections)
             NavigationDestination(icon: Icon(s.icon), label: s.label),

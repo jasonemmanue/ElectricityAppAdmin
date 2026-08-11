@@ -9,6 +9,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 import 'alert_policy.dart';
+import 'notification_router.dart';
 import 'notification_service.dart';
 
 @pragma('vm:entry-point')
@@ -61,12 +62,23 @@ class FcmService {
         body,
         fullScreen: fullScreen,
         serverDecided: serverDecided,
+        data: message.data,
       );
     });
 
+    // Tapped while the app was in the background.
     FirebaseMessaging.onMessageOpenedApp.listen((m) {
       debugPrint('🚪 [ADMIN] App opened from notif: ${m.data}');
+      NotificationRouter.handle(m.data);
     });
+
+    // Tapped while the app was not running at all. This resolves long before
+    // the admin has logged in, so the router holds it until the shell is up.
+    final initial = await _messaging.getInitialMessage();
+    if (initial != null) {
+      debugPrint('🚪 [ADMIN] App lancée depuis une notif: ${initial.data}');
+      NotificationRouter.handle(initial.data);
+    }
 
     if (FirebaseAuth.instance.currentUser != null) {
       await _registerCurrentToken();

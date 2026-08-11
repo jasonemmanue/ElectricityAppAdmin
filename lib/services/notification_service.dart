@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import 'alert_policy.dart';
+import 'notification_router.dart';
 
 /// Channel used when an alert must NOT ring (quiet hours, or urgent alerts
 /// switched off). A separate channel is required because Android freezes a
@@ -91,7 +92,15 @@ class NotificationService {
     InitializationSettings(
         android: initializationSettingsAndroid, iOS: initializationSettingsIOS);
 
-    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+    await flutterLocalNotificationsPlugin.initialize(
+      initializationSettings,
+      // Tapping a notification this app raised itself (foreground alerts and
+      // scheduled reminders) routes through the same place as an FCM tap.
+      onDidReceiveNotificationResponse: (response) {
+        final data = NotificationRouter.decodePayload(response.payload);
+        if (data != null) NotificationRouter.handle(data);
+      },
+    );
     debugPrint("✅ [ADMIN] NotificationService initialisé.");
   }
 
@@ -147,7 +156,9 @@ class NotificationService {
   /// [AlertPolicy] is the fallback for everything else.
   Future<void> showFullScreenNotification(
       int id, String title, String body,
-      {bool fullScreen = true, bool serverDecided = false}) async {
+      {bool fullScreen = true,
+      bool serverDecided = false,
+      Map<String, dynamic>? data}) async {
     final ring = serverDecided
         ? fullScreen
         : fullScreen && await AlertPolicy.shouldRingUrgently();
@@ -188,11 +199,14 @@ class NotificationService {
       title,
       body,
       NotificationDetails(android: androidDetails),
+      // Carries what the tap needs to open the right screen.
+      payload: data == null ? null : NotificationRouter.encodePayload(data),
     );
   }
 
   Future<void> scheduleNotification(
-      int id, String title, String body, DateTime scheduledTime) async {
+      int id, String title, String body, DateTime scheduledTime,
+      {Map<String, dynamic>? data}) async {
     debugPrint("🚀 [ADMIN] Planification du rappel #$id pour $scheduledTime");
 
     // Deliberately minimal: this is the exact shape that was observed posting
@@ -215,6 +229,7 @@ class NotificationService {
       body,
       tz.TZDateTime.from(scheduledTime, tz.local),
       const NotificationDetails(android: androidDetails),
+      payload: data == null ? null : NotificationRouter.encodePayload(data),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
       UILocalNotificationDateInterpretation.absoluteTime,

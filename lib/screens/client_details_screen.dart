@@ -16,10 +16,15 @@ class ClientDetailsScreen extends StatefulWidget {
   final String userId;
   final String userEmail;
 
+  /// Tab to open on: 0 = RDV, 1 = Chat. A tapped chat notification lands
+  /// straight on the conversation instead of making the admin find it.
+  final int initialTab;
+
   const ClientDetailsScreen({
     Key? key,
     required this.userId,
     required this.userEmail,
+    this.initialTab = 0,
   }) : super(key: key);
 
   @override
@@ -36,7 +41,8 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     initializeDateFormatting('fr_FR', null);
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController =
+        TabController(length: 2, vsync: this, initialIndex: widget.initialTab);
     _tabController.addListener(_handleTabSelection);
 
     // Indique que cet écran de chat est maintenant actif
@@ -227,6 +233,12 @@ class AppointmentsList extends StatelessWidget {
       'Rappel de rendez-vous',
       'Rendez-vous pour ${appt['service']} avec $userEmail.',
       finalDateTime,
+      // Tapping the reminder reopens this client on their RDV tab.
+      data: {
+        'type': 'reminder',
+        'userId': userId,
+        'appointmentId': appointmentDoc.id,
+      },
     );
 
     await FirebaseFirestore.instance.collection('appointments').doc(appointmentDoc.id).update({

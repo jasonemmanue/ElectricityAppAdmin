@@ -10,6 +10,7 @@ import 'screens/animated_loading_screen.dart';
 import 'services/alert_policy.dart';
 import 'services/fcm_service.dart';
 import 'services/global_state.dart';
+import 'services/notification_router.dart';
 import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
 
@@ -74,6 +75,8 @@ class _AdminAppState extends State<AdminApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'SOS Electricity Admin',
+      // Lets a tapped notification navigate without a BuildContext.
+      navigatorKey: NotificationRouter.navigatorKey,
       theme: AppTheme.lightTheme,
       home: const AnimatedLoadingScreen(nextScreen: AdminLoginScreen()),
       debugShowCheckedModeBanner: false,
