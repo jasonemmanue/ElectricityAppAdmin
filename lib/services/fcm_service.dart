@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
+import 'alert_policy.dart';
 import 'notification_service.dart';
 
 @pragma('vm:entry-point')
@@ -49,6 +50,9 @@ class FcmService {
       final body =
           message.notification?.body ?? (message.data['body'] as String? ?? '');
       final fullScreen = (message.data['fullScreen'] ?? 'true') == 'true';
+      // Cloud Functions already evaluated this device's quiet hours against its
+      // own clock and picked the channel accordingly — see sendToAdmins.
+      final serverDecided = message.data['ringDecision'] == 'server';
       if (body.isEmpty) return;
 
       await NotificationService().showFullScreenNotification(
@@ -56,6 +60,7 @@ class FcmService {
         title,
         body,
         fullScreen: fullScreen,
+        serverDecided: serverDecided,
       );
     });
 
@@ -87,6 +92,10 @@ class FcmService {
       await callable.call<void>({
         'token': token,
         'platform': Platform.isIOS ? 'ios' : (Platform.isAndroid ? 'android' : 'other'),
+        // Ships the ring policy with the token so a new or refreshed token is
+        // never briefly registered without one — the server rings by default
+        // when a device has no policy, which would defeat quiet hours.
+        'alertPolicy': AlertPolicy.instance.toJson(),
       });
       _lastRegisteredToken = token;
       debugPrint('✅ [ADMIN] FCM token registered: ${token.substring(0, 12)}…');

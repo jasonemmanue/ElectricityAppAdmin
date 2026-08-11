@@ -91,14 +91,22 @@ class NotificationService {
 
 
   /// Shows an admin alert. Whether it *rings* (full-screen intent + alarm
-  /// category, which bypasses Do Not Disturb) is decided by [AlertPolicy]:
-  /// the "Alertes urgentes" switch and the quiet-hours window. Outside those,
-  /// the alert still arrives — it just doesn't wake anyone up at 3 a.m.
+  /// category, which bypasses Do Not Disturb) depends on the "Alertes urgentes"
+  /// switch and the quiet-hours window. Outside those, the alert still arrives
+  /// — it just doesn't wake anyone up at 3 a.m.
+  ///
+  /// For pushes, that call has already been made server-side against this
+  /// device's own clock (functions/src/alertPolicy.ts) and arrives in
+  /// [serverDecided]/[fullScreen]; re-deciding here would only introduce a
+  /// second, possibly contradictory answer — and it would disagree with what
+  /// the system tray already did while the app was backgrounded. The local
+  /// [AlertPolicy] is the fallback for everything else.
   Future<void> showFullScreenNotification(
       int id, String title, String body,
-      {bool fullScreen = true}) async {
-    final allowUrgent = await AlertPolicy.shouldRingUrgently();
-    final ring = fullScreen && allowUrgent;
+      {bool fullScreen = true, bool serverDecided = false}) async {
+    final ring = serverDecided
+        ? fullScreen
+        : fullScreen && await AlertPolicy.shouldRingUrgently();
 
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       // Quiet alerts go to their own channel: on Android a channel's
@@ -127,7 +135,8 @@ class NotificationService {
 
     if (!ring) {
       debugPrint('🔕 [ADMIN] Alerte discrète (heures calmes ou alertes '
-          'urgentes désactivées) : $title');
+          'urgentes désactivées, décidé par '
+          '${serverDecided ? "le serveur" : "l'app"}) : $title');
     }
 
     await flutterLocalNotificationsPlugin.show(

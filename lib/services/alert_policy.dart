@@ -1,3 +1,6 @@
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,6 +15,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///
 /// Everything is persisted in SharedPreferences so the FCM handler can read it
 /// without a BuildContext (notifications arrive with no UI attached).
+///
+/// **The push path no longer relies on this class.** Deciding locally only
+/// worked while the app was alive: once it is backgrounded or killed, Android
+/// renders the notification straight from the channel named in the FCM message
+/// and no Dart code runs, so a quiet-hours alert rang anyway. The decision now
+/// happens in Cloud Functions, which is why [syncToServer] mirrors this policy
+/// — including the phone's own UTC offset, so the server evaluates the window
+/// against THIS device's wall clock — onto `admin_tokens/{token}`.
+/// See functions/src/alertPolicy.ts.
+///
+/// What is left here is the local fallback, used for alerts this app raises
+/// itself and when a push arrives without a server decision.
 class AlertPolicy extends ChangeNotifier {
   AlertPolicy._();
   static final AlertPolicy instance = AlertPolicy._();
@@ -50,12 +65,14 @@ class AlertPolicy extends ChangeNotifier {
     _urgentEnabled = v;
     notifyListeners();
     (await SharedPreferences.getInstance()).setBool(_kUrgentEnabled, v);
+    await syncToServer();
   }
 
   Future<void> setQuietEnabled(bool v) async {
     _quietEnabled = v;
     notifyListeners();
     (await SharedPreferences.getInstance()).setBool(_kQuietEnabled, v);
+    await syncToServer();
   }
 
   Future<void> setQuietStart(TimeOfDay t) async {
@@ -63,6 +80,7 @@ class AlertPolicy extends ChangeNotifier {
     notifyListeners();
     (await SharedPreferences.getInstance())
         .setInt(_kQuietStartMin, _quietStartMinutes);
+    await syncToServer();
   }
 
   Future<void> setQuietEnd(TimeOfDay t) async {
@@ -70,6 +88,43 @@ class AlertPolicy extends ChangeNotifier {
     notifyListeners();
     (await SharedPreferences.getInstance())
         .setInt(_kQuietEndMin, _quietEndMinutes);
+    await syncToServer();
+  }
+
+  /// Wire format for Cloud Functions. [utcOffsetMinutes] is read fresh every
+  /// time: it is what lets the server work out what time it is *on this phone*,
+  /// and it changes with travel and DST.
+  Map<String, dynamic> toJson() => {
+        'urgentEnabled': _urgentEnabled,
+        'quietEnabled': _quietEnabled,
+        'quietStartMinutes': _quietStartMinutes,
+        'quietEndMinutes': _quietEndMinutes,
+        'utcOffsetMinutes': DateTime.now().timeZoneOffset.inMinutes,
+      };
+
+  /// Mirror this policy onto the device's `admin_tokens/{token}` doc so the
+  /// triggers can decide server-side whether a push rings here.
+  ///
+  /// Best-effort: a failure only means the server keeps the previous policy
+  /// (or rings, if it never received one), so it must never break the UI.
+  /// Called after every settings change; registration carries it too, for the
+  /// case where the token is minted before the user touches Settings.
+  Future<void> syncToServer() async {
+    if (FirebaseAuth.instance.currentUser == null) return;
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token == null || token.isEmpty) return;
+      await FirebaseFunctions.instance
+          .httpsCallable('updateAdminAlertPolicy')
+          .call<void>({'token': token, 'policy': toJson()});
+      debugPrint('☁️ [ADMIN] Politique d\'alerte synchronisée '
+          '(urgent=$_urgentEnabled, calme=$_quietEnabled '
+          '${quietStart.hour}h→${quietEnd.hour}h, '
+          'UTC${DateTime.now().timeZoneOffset.inMinutes >= 0 ? '+' : ''}'
+          '${DateTime.now().timeZoneOffset.inMinutes}min)');
+    } catch (e) {
+      debugPrint('⚠️ [ADMIN] Sync de la politique d\'alerte échouée : $e');
+    }
   }
 
   /// True when [now] falls inside the quiet window. Handles windows that wrap
@@ -87,9 +142,9 @@ class AlertPolicy extends ChangeNotifier {
     return cur >= _quietStartMinutes || cur < _quietEndMinutes;
   }
 
-  /// The single question the FCM handler asks. Reads straight from
-  /// SharedPreferences so it works in a background isolate where the in-memory
-  /// singleton may not have been hydrated.
+  /// Local fallback for alerts raised by this app, and for pushes that carry no
+  /// server decision. Reads straight from SharedPreferences so it also works in
+  /// a background isolate where the in-memory singleton was never hydrated.
   static Future<bool> shouldRingUrgently() async {
     final p = await SharedPreferences.getInstance();
     final urgent = p.getBool(_kUrgentEnabled) ?? true;

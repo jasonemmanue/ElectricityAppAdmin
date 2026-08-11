@@ -27,14 +27,16 @@ Future<void> main() async {
   await notif.requestPermissions();
   await notif.requestAlarmPermissions();
 
+  // Load the alert policy (urgent-alerts switch + quiet hours) before the UI so
+  // Settings shows the real values on first frame — and before FcmService,
+  // which registers the token and ships the policy along with it. Hydrating
+  // afterwards would upload the defaults over the admin's real settings.
+  await AlertPolicy.instance.hydrate();
+
   await FcmService.instance.init();
 
   final prefs = await SharedPreferences.getInstance();
   await prefs.setBool('isAdmin', true);
-
-  // Load the alert policy (urgent-alerts switch + quiet hours) before the UI
-  // so Settings shows the real values on first frame.
-  await AlertPolicy.instance.hydrate();
 
   runApp(const AdminApp());
 }
