@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import '../services/alert_policy.dart';
 import '../services/notification_service.dart';
 import '../widgets/message_bubble.dart';
 import 'map_screen.dart';
@@ -235,10 +236,36 @@ class AppointmentsList extends StatelessWidget {
       }
     });
 
+    // A reminder rings whatever the alert settings say: it is an alarm the
+    // admin deliberately set for this instant, whereas quiet hours exist to
+    // blunt *incoming* alerts nobody chose the timing of. Still, an admin who
+    // has muted alerts and then picks 3 a.m. should hear it from us now rather
+    // than from the phone that night.
+    final policy = AlertPolicy.instance;
+    final String? warning;
+    if (policy.isWithinQuietHours(finalDateTime)) {
+      warning = 'Il sonnera malgré vos heures calmes '
+          '(${_formatTimeOfDay(policy.quietStart)} → ${_formatTimeOfDay(policy.quietEnd)}).';
+    } else if (!policy.urgentEnabled) {
+      warning = 'Il sonnera malgré les alertes urgentes désactivées.';
+    } else {
+      warning = null;
+    }
+
+    final when = DateFormat('dd/MM/yyyy HH:mm').format(finalDateTime);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Rappel programmé pour ${DateFormat('dd/MM/yyyy HH:mm').format(finalDateTime)}')),
+      SnackBar(
+        content: Text(warning == null
+            ? 'Rappel programmé pour $when'
+            : 'Rappel programmé pour $when. $warning'),
+        backgroundColor: warning == null ? null : Colors.orange.shade800,
+        duration: Duration(seconds: warning == null ? 4 : 7),
+      ),
     );
   }
+
+  static String _formatTimeOfDay(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   Future<void> _cancelReminder(BuildContext context, DocumentSnapshot appointmentDoc) async {
     var appt = appointmentDoc.data() as Map<String, dynamic>;
