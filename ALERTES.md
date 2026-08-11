@@ -87,11 +87,21 @@ fuseaux (UTC+1 silencieux pendant qu'UTC-5 sonne au même instant) et le parsing
 Si les logs annoncent `1 device(s) with no synced policy → ring`, c'est que
 l'appareil n'a jamais synchronisé — ouvre l'app admin une fois en étant connecté.
 
-## Limite connue
+## Hors périmètre : les rappels de RDV
 
-Les **rappels de RDV** programmés à la main (Clients → un client → un rendez-vous)
-passent par `NotificationService.scheduleNotification`, une notification locale
-qui ne consulte **ni** cette politique **ni** le serveur : elle force le canal
-bruyant et le plein écran. Un rappel fixé à 3 h du matin sonnera donc même avec
-les heures calmes actives. C'est discutable dans les deux sens — l'heure a été
-choisie explicitement par l'admin — donc c'est laissé tel quel pour l'instant.
+Les **rappels de RDV** (Clients → un client → un rendez-vous) n'ont rien à voir
+avec ce qui précède, et c'est voulu.
+
+Ils passent par `NotificationService.scheduleNotification` : une notification
+**purement locale, côté administrateur**, programmée par l'admin lui-même à une
+heure qu'il choisit. Aucun push, aucune Cloud Function, aucun autre appareil —
+donc rien à décider côté serveur.
+
+Conséquence assumée : un rappel fixé à 3 h du matin sonnera, heures calmes
+actives ou non. Les heures calmes protègent des alertes **entrantes**, subies et
+imprévisibles (nouveau RDV, message, devis) ; un rappel, l'admin l'a réglé
+exprès pour cette heure-là.
+
+En pratique, ne teste donc pas les heures calmes via un rappel de RDV : tu
+conclurais à tort que la fonctionnalité ne marche pas. Utilise le parcours de la
+section précédente.
