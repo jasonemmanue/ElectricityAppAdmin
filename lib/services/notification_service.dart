@@ -195,22 +195,18 @@ class NotificationService {
       int id, String title, String body, DateTime scheduledTime) async {
     debugPrint("🚀 [ADMIN] Planification du rappel #$id pour $scheduledTime");
 
+    // Deliberately minimal: this is the exact shape that was observed posting
+    // correctly on device, with the channel as the ONLY difference. The alarm
+    // stream comes from the channel ([alarmChannelId]), so nothing else needs
+    // to be set here — and every extra field is one more thing that can make
+    // the receiver fail to rebuild the notification when it fires.
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       alarmChannelId,
       'Rappels de rendez-vous',
       importance: Importance.max,
       priority: Priority.high,
-      playSound: true,
       sound: RawResourceAndroidNotificationSound('notification_sound'),
-      // category + alarm usage are what make the system treat this as an
-      // alarm rather than a notification: alarm stream, exempt from the
-      // notification-volume and OEM throttling that was swallowing it.
-      audioAttributesUsage: AudioAttributesUsage.alarm,
-      category: AndroidNotificationCategory.alarm,
       fullScreenIntent: true,
-      visibility: NotificationVisibility.public,
-      icon: 'ic_notification',
-      color: Color(0xFF1A237E),
     );
 
     await flutterLocalNotificationsPlugin.zonedSchedule(

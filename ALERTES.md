@@ -113,16 +113,41 @@ le dit explicitement :
 L'admin garde la main, il sait simplement à quoi s'attendre. Le message est en
 orange et reste affiché plus longtemps que la confirmation normale.
 
-### Prérequis : l'app doit être exemptée d'optimisation batterie
+### Le receiver doit être déclaré dans le manifeste
 
-**C'est la cause n°1 d'un rappel qui ne sonne pas**, et ça ne se voit pas dans le
-code.
+**C'est ce qui empêchait tout rappel de se déclencher**, et l'échec est
+totalement silencieux.
 
-Quand l'alarme se déclenche avec l'app fermée, le système doit démarrer le
-processus pour exécuter `ScheduledNotificationReceiver`. Sur Samsung, il refuse
-si l'app n'est pas exemptée. Constaté sur l'appareil : le broadcast arrivait
-à `18:57:00.009` pile, **aucun `Start proc` derrière**, aucune notification
-postée. Le rappel ne fonctionnait que si l'app était encore chaude.
+`flutter_local_notifications` ne déclare **aucun receiver** dans son propre
+manifeste — uniquement des permissions. C'est donc à l'app de déclarer
+`ScheduledNotificationReceiver`, faute de quoi : AlarmManager se déclenche à
+l'heure pile, diffuse vers ce composant explicite, Android n'arrive pas à le
+résoudre, et **le broadcast est jeté**. Aucun démarrage de processus, aucune
+notification, aucune erreur dans logcat. Rien à quoi se raccrocher.
+
+```xml
+<receiver android:exported="false"
+    android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"/>
+```
+
+Le boot receiver (`ScheduledNotificationBootReceiver`, qui reprogramme les
+rappels après un redémarrage) doit être déclaré à part — il l'était déjà, ce qui
+brouillait la piste : un receiver du plugin fonctionnait, l'autre non.
+
+Vérifier dans l'APK réellement installé :
+
+```bash
+adb pull $(adb shell pm path com.example.electricity_app_admin | sed 's/package://') /tmp/a.apk
+aapt2 dump xmltree /tmp/a.apk --file AndroidManifest.xml | grep ScheduledNotification
+```
+
+Les **deux** doivent apparaître.
+
+### Recommandé : exempter l'app d'optimisation batterie
+
+Secondaire, mais utile : quand l'alarme se déclenche app fermée depuis
+longtemps, le système doit démarrer le processus pour exécuter le receiver, et
+les gestions agressives d'arrière-plan peuvent le refuser.
 
 L'app demande l'exemption au démarrage
 (`Permission.ignoreBatteryOptimizations`), mais sur Samsung il faut souvent
@@ -142,7 +167,8 @@ adb shell am get-standby-bucket com.example.electricity_app_admin   # 10 = ACTIV
 ```
 
 La première commande doit renvoyer une ligne. Si elle ne renvoie rien, l'app
-n'est pas exemptée et les rappels ne partiront pas app fermée.
+n'est pas exemptée — à corriger avant de conclure quoi que ce soit sur un rappel
+qui n'est pas parti alors que l'app était fermée depuis longtemps.
 
 ### Le rappel est joué sur le flux *alarme*
 
