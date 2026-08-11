@@ -23,6 +23,19 @@
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
         android:enableOnBackInvokedCallback="true">
+        <!--
+          Receives the AlarmManager broadcast when a scheduled reminder is due,
+          and posts the notification. flutter_local_notifications declares NO
+          receivers in its own manifest (only permissions), so the app has to.
+
+          Without it the failure is completely silent: AlarmManager fires on
+          time and broadcasts to this explicit component, Android cannot resolve
+          it, and the broadcast is dropped — no process start, no notification,
+          no error in logcat. Reminders simply never went off, while an
+          immediate show() on the same channel worked fine.
+        -->
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"/>
+
         <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
