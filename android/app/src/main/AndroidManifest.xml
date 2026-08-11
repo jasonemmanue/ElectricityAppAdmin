@@ -5,6 +5,14 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!--
+      Without this, Samsung's background management refuses to start the process
+      when a scheduled reminder's alarm fires: the broadcast reaches
+      ActivityManager but no process is ever started, so the receiver never runs
+      and no notification is posted. Verified on device — the reminder worked
+      only while the app was still warm.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />

@@ -113,6 +113,37 @@ le dit explicitement :
 L'admin garde la main, il sait simplement à quoi s'attendre. Le message est en
 orange et reste affiché plus longtemps que la confirmation normale.
 
+### Prérequis : l'app doit être exemptée d'optimisation batterie
+
+**C'est la cause n°1 d'un rappel qui ne sonne pas**, et ça ne se voit pas dans le
+code.
+
+Quand l'alarme se déclenche avec l'app fermée, le système doit démarrer le
+processus pour exécuter `ScheduledNotificationReceiver`. Sur Samsung, il refuse
+si l'app n'est pas exemptée. Constaté sur l'appareil : le broadcast arrivait
+à `18:57:00.009` pile, **aucun `Start proc` derrière**, aucune notification
+postée. Le rappel ne fonctionnait que si l'app était encore chaude.
+
+L'app demande l'exemption au démarrage
+(`Permission.ignoreBatteryOptimizations`), mais sur Samsung il faut souvent
+aussi le faire à la main :
+
+1. **Paramètres → Applications → SOS Electricity Admin → Batterie**
+   → choisir **« Sans restriction »**
+2. **Paramètres → Batterie → Limites d'utilisation en arrière-plan**
+   → **« Applications en veille profonde »** : vérifier que l'app **n'y est pas**
+   → idem pour **« Applications mises en veille »**
+
+Vérification en ligne de commande :
+
+```bash
+adb shell dumpsys deviceidle whitelist | grep electricity
+adb shell am get-standby-bucket com.example.electricity_app_admin   # 10 = ACTIVE
+```
+
+La première commande doit renvoyer une ligne. Si elle ne renvoie rien, l'app
+n'est pas exemptée et les rappels ne partiront pas app fermée.
+
 ### Le rappel est joué sur le flux *alarme*
 
 Un rappel utilise son propre canal, `admin_channel_alarm_01`, déclaré avec

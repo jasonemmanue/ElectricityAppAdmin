@@ -107,12 +107,30 @@ class NotificationService {
 
   // Demande la permission spéciale pour les alarmes et rappels
   Future<void> requestAlarmPermissions() async {
-    if (Platform.isAndroid) {
-      var status = await Permission.scheduleExactAlarm.status;
-      if (status.isDenied) {
-        await Permission.scheduleExactAlarm.request();
-      }
+    if (!Platform.isAndroid) return;
+
+    var status = await Permission.scheduleExactAlarm.status;
+    if (status.isDenied) {
+      await Permission.scheduleExactAlarm.request();
     }
+
+    // Exact alarms are not enough on their own. When the alarm fires with the
+    // app closed, the system has to start the process to run
+    // ScheduledNotificationReceiver — and Samsung's background management
+    // refuses to unless the app is exempt from battery optimisation. Observed
+    // on device: the broadcast reached ActivityManager on the dot, no process
+    // was ever started, and no notification was posted. Reminders only worked
+    // while the app was still warm.
+    if (await Permission.ignoreBatteryOptimizations.isDenied) {
+      await Permission.ignoreBatteryOptimizations.request();
+    }
+  }
+
+  /// Whether this device will actually run a reminder's alarm with the app
+  /// closed. False means the reminder will fire silently into the void.
+  Future<bool> canFireRemindersInBackground() async {
+    if (!Platform.isAndroid) return true;
+    return Permission.ignoreBatteryOptimizations.isGranted;
   }
 
 
