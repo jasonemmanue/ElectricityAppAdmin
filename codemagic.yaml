@@ -1,0 +1,83 @@
+# Codemagic — SOS Electricity Admin
+#
+# Android only, deliberately: this app is the electrician's own console. It is
+# not published on any store and there is no iOS build of it. That costs it
+# nothing in reach — it talks to the client app through Firestore and Cloud
+# Functions, never device-to-device, so it reaches iPhones and iPads exactly as
+# it reaches Android phones.
+#
+# The APK is here to be run in Codemagic's browser emulator (App Preview): the
+# artifact below is what puts the "Quick Launch" button on the build.
+
+workflows:
+
+  android-preview:
+    name: Android APK — App Preview
+    max_build_duration: 30
+    instance_type: linux_x2
+    environment:
+      flutter: stable
+      java: 21
+      groups:
+        # Must provide ADMIN_CREDENTIALS_DART — see the "Restore" step below.
+        - admin_secrets
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    scripts:
+      - name: Drop the local JDK path
+        # android/gradle.properties pins org.gradle.java.home to a Windows path,
+        # because Android Studio's bundled JBR breaks Kotlin DSL on Gradle 8.13
+        # locally. That path does not exist on a Linux builder, and Gradle fails
+        # outright with "Java home supplied seems to be invalid" before
+        # compiling anything. Stripping it here leaves the local setup alone and
+        # lets Gradle use the builder's JDK 21.
+        script: |
+          set -euxo pipefail
+          sed -i.bak '/org\.gradle\.java\.home/d' android/gradle.properties
+          rm -f android/gradle.properties.bak
+          cat android/gradle.properties
+
+      - name: Restore admin_credentials.dart
+        # lib/config/admin_credentials.dart is gitignored (it holds the admin
+        # sign-in details) but admin_login_screen.dart imports it, so a clean
+        # checkout does not compile. Codemagic rebuilds it from an encrypted
+        # variable holding the base64 of the real file.
+        #   base64 -w0 lib/config/admin_credentials.dart
+        # then paste into the `admin_secrets` group as ADMIN_CREDENTIALS_DART,
+        # with "Secure" ticked.
+        script: |
+          set -euo pipefail
+          if [ -z "${ADMIN_CREDENTIALS_DART:-}" ]; then
+            echo "ERROR: ADMIN_CREDENTIALS_DART is not set."
+            echo "Add it to the 'admin_secrets' group — see the comment above."
+            exit 1
+          fi
+          echo "$ADMIN_CREDENTIALS_DART" | base64 --decode > lib/config/admin_credentials.dart
+          echo "admin_credentials.dart restored ($(wc -c < lib/config/admin_credentials.dart) bytes)"
+
+      - name: Get dependencies
+        script: |
+          set -euxo pipefail
+          flutter pub get
+
+      - name: Analyze
+        # Infos and warnings are style noise here and must not fail the build;
+        # only real errors should.
+        script: |
+          set -euxo pipefail
+          flutter analyze lib --no-fatal-infos --no-fatal-warnings
+
+      - name: Build APK
+        # Debug, not release: App Preview accepts any APK, and an unsigned
+        # release APK will not install on the emulator.
+        script: |
+          set -euxo pipefail
+          flutter build apk --debug
+
+    artifacts:
+      # App Preview only offers Quick Launch for artifacts listed here.
+      - build/app/outputs/flutter-apk/app-debug.apk
