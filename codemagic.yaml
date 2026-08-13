@@ -16,7 +16,11 @@ workflows:
     max_build_duration: 30
     instance_type: linux_x2
     environment:
-      flutter: stable
+      # Pinned, NOT `stable`: `stable` resolves to whatever ships the day the
+      # build runs, which is how the client app's iOS build broke on a commit
+      # that had touched nothing. 3.38.4 is the SDK this app is developed
+      # against; bump it deliberately, after testing.
+      flutter: 3.38.4
       java: 21
       groups:
         # Must provide ADMIN_CREDENTIALS_DART — see the "Restore" step below.
