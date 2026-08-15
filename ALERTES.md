@@ -51,23 +51,31 @@ sa création, donc couper le son du canal bruyant au moment de l'envoi est ignor
 
 ## La sonnerie
 
-`android/app/src/main/res/raw/notification_sound.mp3` — « Urgent simple tone
-loop » (Mixkit, licence Mixkit : usage commercial libre, sans attribution),
-recoupé à **exactement 7,000 s** avec un fondu de sortie de 150 ms, en 48 kHz
+`android/app/src/main/res/raw/notification_sound.mp3` — **5,000 s**, 48 kHz
 stéréo 128 kbps.
+
+C'est le son d'origine, raccourci de 7 s à 5 s. Le raccourcissement se fait
+**par le début, pas par la fin** : le son est un crescendo, il monte de −37 dB
+à −5 dB sur toute sa durée. Couper les 5 premières secondes garderait la partie
+inaudible et jetterait le pic — l'alerte deviendrait deux fois plus discrète
+sans que personne ait demandé ça. Couper les 2 premières secondes garde la
+montée et le pic intacts : niveau mesuré −28,9 dB moyen / −5,6 dB crête, contre
+−29,4 / −5,4 pour l'original.
+
+```bash
+# t=2 → 7 s de l'original, fondu d'entrée de 60 ms pour éviter le clic
+ffmpeg -ss 2 -i original.mp3 -af "afade=t=in:st=0:d=0.06" \
+  -ar 48000 -ac 2 -b:a 128k android/app/src/main/res/raw/notification_sound.mp3
+```
 
 Deux contraintes si tu la remplaces :
 
 - **Garde le nom de fichier.** Les canaux existants sur le téléphone de l'admin
   pointent vers `android.resource://<pkg>/raw/notification_sound`. Renommer le
   fichier casserait ce lien sans erreur — le canal jouerait le son par défaut.
-- **Garde la durée à 7 s.** Elle est délibérée : assez longue pour réveiller,
-  assez courte pour ne pas s'imposer (elle était à 60 s au départ).
-
-```bash
-ffmpeg -i source.mp3 -t 7 -af "afade=t=out:st=6.85:d=0.15" \
-  -ar 48000 -ac 2 -b:a 128k android/app/src/main/res/raw/notification_sound.mp3
-```
+- **Vérifie le niveau, pas seulement la durée** (`ffmpeg -i f.mp3 -af
+  volumedetect -f null -`). Un simple `-t` sur un son qui monte en puissance
+  passe tous les contrôles évidents et sort quand même une alerte trop faible.
 
 Le son n'est audible qu'après réinstallation de l'app : Android met en cache
 l'URI du canal, pas le fichier, donc les nouveaux octets sont bien repris — mais
