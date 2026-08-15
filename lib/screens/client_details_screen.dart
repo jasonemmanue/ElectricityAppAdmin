@@ -1,5 +1,7 @@
 //lib/screens/client_details_screen.dart
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -10,11 +12,17 @@ import '../services/notification_service.dart';
 import '../widgets/message_bubble.dart';
 import 'map_screen.dart';
 import '../services/global_state.dart';
+import '../theme/app_theme.dart';
 
 // WIDGET PRINCIPAL QUI GÈRE LES ONGLETS
 class ClientDetailsScreen extends StatefulWidget {
   final String userId;
   final String userEmail;
+
+  /// Known at push time when the caller already has it (the clients list does).
+  /// Only a starting value: the header re-reads `users/{uid}` and prefers what
+  /// it finds there, so opening from a notification is not stuck with an email.
+  final String userName;
 
   /// Tab to open on: 0 = RDV, 1 = Chat. A tapped chat notification lands
   /// straight on the conversation instead of making the admin find it.
@@ -24,6 +32,7 @@ class ClientDetailsScreen extends StatefulWidget {
     Key? key,
     required this.userId,
     required this.userEmail,
+    this.userName = '',
     this.initialTab = 0,
   }) : super(key: key);
 
@@ -35,6 +44,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
   final GlobalState _globalState = GlobalState();
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _chatDocSub;
 
   @override
   void initState() {
@@ -50,6 +60,28 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
 
     // Réinitialise les compteurs dès l'ouverture de l'écran
     _resetCountersForCurrentTab(_tabController.index);
+
+    // Opening the screen once was not enough: a message arriving while the
+    // admin is *reading* the conversation left the badge stuck at 1, so the
+    // clients list kept claiming an unread message that had been read. Watch
+    // the counters and clear the one belonging to the visible tab.
+    _chatDocSub = FirebaseFirestore.instance
+        .collection('chats')
+        .doc(widget.userId)
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      final data = snap.data();
+      if (data == null) return;
+      final key = _tabController.index == 1
+          ? 'unreadChatCountAdmin'
+          : 'unreadAppointmentCountAdmin';
+      // Only when non-zero — writing 0 over 0 would retrigger this listener
+      // and loop.
+      if (((data[key] as num?)?.toInt() ?? 0) > 0) {
+        _resetCountersForCurrentTab(_tabController.index);
+      }
+    });
   }
 
   @override
@@ -57,6 +89,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
     WidgetsBinding.instance.removeObserver(this);
     // Indique que l'écran de chat n'est plus actif
     _globalState.setChatScreenActive(false, userId: null);
+    _chatDocSub?.cancel();
     _tabController.removeListener(_handleTabSelection);
     _tabController.dispose();
     super.dispose();
@@ -95,9 +128,45 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.userEmail,
-          style: const TextStyle(fontSize: 16, color: Colors.white),
+        // The header used to be the raw email — and empty when the screen was
+        // pushed from a notification, which never carries one. Read the client
+        // document instead so the admin always knows who they are looking at.
+        title: StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(widget.userId)
+              .snapshots(),
+          builder: (context, snap) {
+            final data = snap.data?.data() as Map<String, dynamic>?;
+            final name =
+                (data?['fullName'] as String?)?.trim().isNotEmpty == true
+                    ? (data!['fullName'] as String).trim()
+                    : widget.userName.trim();
+            final email = (data?['email'] as String?)?.trim().isNotEmpty == true
+                ? (data!['email'] as String).trim()
+                : widget.userEmail.trim();
+            final primary = name.isNotEmpty ? name : (email.isNotEmpty ? email : 'Client');
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  primary,
+                  style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (name.isNotEmpty && email.isNotEmpty)
+                  Text(
+                    email,
+                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            );
+          },
         ),
         iconTheme: const IconThemeData(color: Colors.white),
         bottom: TabBar(
@@ -170,7 +239,11 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen>
         controller: _tabController,
         children: [
           AppointmentsList(userId: widget.userId, userEmail: widget.userEmail),
-          AdminChatView(userId: widget.userId),
+          AdminChatView(
+            userId: widget.userId,
+            fallbackName: widget.userName,
+            fallbackEmail: widget.userEmail,
+          ),
         ],
       ),
     );
@@ -415,7 +488,17 @@ class AppointmentsList extends StatelessWidget {
 // WIDGET POUR LA VUE DU CHAT
 class AdminChatView extends StatefulWidget {
   final String userId;
-  const AdminChatView({Key? key, required this.userId}) : super(key: key);
+
+  /// Shown until `users/{uid}` loads, and kept if that document has no name.
+  final String fallbackName;
+  final String fallbackEmail;
+
+  const AdminChatView({
+    Key? key,
+    required this.userId,
+    this.fallbackName = '',
+    this.fallbackEmail = '',
+  }) : super(key: key);
 
   @override
   _AdminChatViewState createState() => _AdminChatViewState();
@@ -469,6 +552,11 @@ class _AdminChatViewState extends State<AdminChatView> {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        _ChatPartnerHeader(
+          userId: widget.userId,
+          fallbackName: widget.fallbackName,
+          fallbackEmail: widget.fallbackEmail,
+        ),
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -644,7 +732,9 @@ class _AdminChatViewState extends State<AdminChatView> {
                   child: TextField(
                     controller: _messageController,
                     decoration: InputDecoration(
-                      hintText: 'Répondre au client...',
+                      hintText: widget.fallbackName.trim().isNotEmpty
+                          ? 'Répondre à ${widget.fallbackName.trim().split(' ').first}…'
+                          : 'Répondre au client…',
                       filled: true,
                       fillColor: Colors.grey.shade100,
                       border: OutlineInputBorder(
@@ -667,5 +757,100 @@ class _AdminChatViewState extends State<AdminChatView> {
         ],
       ),
     );
+  }
+}
+/// Names the client at the top of the conversation.
+///
+/// The chat is reached from several places — the clients list, a tapped
+/// notification, the dashboard — and only some of them know who the client is.
+/// Reading `users/{uid}` here means the answer is the same wherever you came
+/// from, and it stays right if the client edits their profile mid-conversation.
+class _ChatPartnerHeader extends StatelessWidget {
+  const _ChatPartnerHeader({
+    required this.userId,
+    required this.fallbackName,
+    required this.fallbackEmail,
+  });
+
+  final String userId;
+  final String fallbackName;
+  final String fallbackEmail;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').doc(userId).snapshots(),
+      builder: (context, snap) {
+        final data = snap.data?.data() as Map<String, dynamic>?;
+        String pick(String key, String fallback) {
+          final v = (data?[key] as String?)?.trim();
+          return (v != null && v.isNotEmpty) ? v : fallback.trim();
+        }
+
+        final name = pick('fullName', fallbackName);
+        final email = pick('email', fallbackEmail);
+        final phone = pick('phoneNumber', '');
+        final title = name.isNotEmpty ? name : (email.isNotEmpty ? email : 'Client');
+        final subtitle = [
+          if (name.isNotEmpty && email.isNotEmpty) email,
+          if (phone.isNotEmpty) phone,
+        ].join(' · ');
+
+        return Material(
+          color: AppTheme.backgroundSecondary,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: AppTheme.primary,
+                  child: Text(
+                    _initials(title),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Conversation avec $title',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textPrimary,
+                          fontSize: 14,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (subtitle.isNotEmpty)
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                              fontSize: 12, color: AppTheme.textSecondary),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  static String _initials(String s) {
+    final trimmed = s.split('@').first.trim();
+    if (trimmed.isEmpty) return '?';
+    final parts = trimmed.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return trimmed.substring(0, trimmed.length >= 2 ? 2 : 1).toUpperCase();
   }
 }
