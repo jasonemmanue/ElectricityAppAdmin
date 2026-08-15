@@ -49,6 +49,30 @@ multicasts :
 Deux canaux sont nécessaires : Android fige l'importance et le son d'un canal à
 sa création, donc couper le son du canal bruyant au moment de l'envoi est ignoré.
 
+## La sonnerie
+
+`android/app/src/main/res/raw/notification_sound.mp3` — « Urgent simple tone
+loop » (Mixkit, licence Mixkit : usage commercial libre, sans attribution),
+recoupé à **exactement 7,000 s** avec un fondu de sortie de 150 ms, en 48 kHz
+stéréo 128 kbps.
+
+Deux contraintes si tu la remplaces :
+
+- **Garde le nom de fichier.** Les canaux existants sur le téléphone de l'admin
+  pointent vers `android.resource://<pkg>/raw/notification_sound`. Renommer le
+  fichier casserait ce lien sans erreur — le canal jouerait le son par défaut.
+- **Garde la durée à 7 s.** Elle est délibérée : assez longue pour réveiller,
+  assez courte pour ne pas s'imposer (elle était à 60 s au départ).
+
+```bash
+ffmpeg -i source.mp3 -t 7 -af "afade=t=out:st=6.85:d=0.15" \
+  -ar 48000 -ac 2 -b:a 128k android/app/src/main/res/raw/notification_sound.mp3
+```
+
+Le son n'est audible qu'après réinstallation de l'app : Android met en cache
+l'URI du canal, pas le fichier, donc les nouveaux octets sont bien repris — mais
+seulement au prochain démarrage du processus.
+
 Détail complet et format stocké : [`functions/README.md`](../ElectricityApp/functions/README.md)
 dans le dépôt de l'app client.
 

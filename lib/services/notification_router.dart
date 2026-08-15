@@ -66,7 +66,15 @@ class NotificationRouter {
     switch (type) {
       case 'appointment_created':
       case 'appointment_updated':
-        requestedTab.value = 1; // RDV
+        // The alert names one appointment, so land on that client's RDV tab —
+        // switching to the global RDV list left the admin to find the row the
+        // notification was already about. Falls back to the list when the push
+        // carries no userId.
+        if (userId.isEmpty) {
+          requestedTab.value = 1; // RDV
+        } else {
+          await _openClient(userId, initialTab: 0);
+        }
         break;
 
       case 'chat':
@@ -103,9 +111,10 @@ class NotificationRouter {
   /// Encode a data map for a local notification's payload.
   static String encodePayload(Map<String, dynamic> data) => jsonEncode(data);
 
-  /// Push a client's detail screen. The email is not in the push payload, so it
-  /// is read from Firestore; the screen only uses it for its title, so a lookup
-  /// failure degrades to an empty header rather than a failed navigation.
+  /// Push a client's detail screen. Neither the name nor the email travels in
+  /// the push payload, so both are read from Firestore here to seed the header;
+  /// the screen also streams that document itself, so a lookup failure only
+  /// costs a blank first frame, never the navigation.
   static Future<void> _openClient(String userId, {required int initialTab}) async {
     if (userId.isEmpty) {
       requestedTab.value = 2; // Clients — better than going nowhere.
@@ -113,12 +122,12 @@ class NotificationRouter {
     }
 
     String email = '';
+    String name = '';
     try {
       final snap =
           await FirebaseFirestore.instance.collection('users').doc(userId).get();
-      email = (snap.data()?['email'] as String?) ??
-          (snap.data()?['fullName'] as String?) ??
-          '';
+      email = (snap.data()?['email'] as String?)?.trim() ?? '';
+      name = (snap.data()?['fullName'] as String?)?.trim() ?? '';
     } catch (_) {
       // Offline or rules issue — push anyway, the screen loads its own data.
     }
@@ -129,6 +138,7 @@ class NotificationRouter {
         builder: (_) => ClientDetailsScreen(
           userId: userId,
           userEmail: email,
+          userName: name,
           initialTab: initialTab,
         ),
       ),
