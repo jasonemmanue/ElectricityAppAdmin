@@ -91,7 +91,9 @@ class _UsersScreenState extends State<UsersScreen> {
         }
         if (snap.hasError) return Center(child: Text('Erreur : ${snap.error}'));
 
-        var docs = snap.data?.docs ?? [];
+        // Copied before sorting: `docs` comes straight from the snapshot and
+        // is not ours to reorder in place.
+        var docs = List<QueryDocumentSnapshot>.of(snap.data?.docs ?? []);
         if (_query.isNotEmpty) {
           docs = docs.where((d) {
             final m = d.data() as Map<String, dynamic>;
